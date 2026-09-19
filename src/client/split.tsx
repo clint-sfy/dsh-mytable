@@ -205,6 +205,17 @@ function sameContent(a: SplitContent, b: SplitContent): boolean {
   return false
 }
 
+/** 同一窗格里的终端标签始终按当前顺序连续编号；关闭/移动后不会留下“终端3”空洞。 */
+function renumberTerminalTabs(tabs: PaneTab[]): PaneTab[] {
+  let n = 0
+  return tabs.map((tab) => {
+    if (!isTerminalTab(tab)) return tab
+    n += 1
+    const title = T('pane.terminalN', { n: String(n) })
+    return tab.title === title ? tab : { ...tab, title }
+  })
+}
+
 const FILE_RESOURCE_PREFIX = 'dsh-resource://file/'
 
 type FileResource =
@@ -1415,7 +1426,8 @@ export const splitStore: SplitState = {
       if (existing >= 0) return { ...pane, content: null, tabs, active: existing }
       const tab: PaneTab = { id: 't' + Date.now().toString(36), title: titleOverride || tabTitleOf(content), content }
       tabs.push(tab)
-      return { ...pane, content: null, tabs, active: tabs.length - 1 }
+      const numbered = renumberTerminalTabs(tabs)
+      return { ...pane, content: null, tabs: numbered, active: numbered.length - 1 }
     }
     const next = updatePane(spec, row, i, mutate)
     if (!next) return
@@ -1429,7 +1441,7 @@ export const splitStore: SplitState = {
     const spec = this.spec
     if (!spec) return
     const mutate = (pane: SplitPane): SplitPane => {
-      const tabs = (pane.tabs ?? []).filter((t) => t.id !== tabId)
+      const tabs = renumberTerminalTabs((pane.tabs ?? []).filter((t) => t.id !== tabId))
       return { ...pane, tabs, active: 0 }
     }
     const next = updatePane(spec, row, i, mutate)
@@ -1456,8 +1468,8 @@ export const splitStore: SplitState = {
     if (!fromPane || !toPane) return
     const tab = (fromPane.tabs ?? []).find((t) => t.id === tabId)
     if (!tab) return
-    const fromTabs = (fromPane.tabs ?? []).filter((t) => t.id !== tabId)
-    const toTabs = [...(toPane.tabs ?? []), tab]
+    const fromTabs = renumberTerminalTabs((fromPane.tabs ?? []).filter((t) => t.id !== tabId))
+    const toTabs = renumberTerminalTabs([...(toPane.tabs ?? []), tab])
     const setPane = (row: PaneRow, i: number, pane: SplitPane) => {
       if (row === 'left') spec.left = pane
       else { const __ri = rowIndex(spec, row); if (__ri >= 0 && __rows[__ri]) __rows[__ri][i] = pane }
@@ -2703,6 +2715,17 @@ function TerminalPane() {
     const focusTerm = () => { try { term.focus() } catch {} }
     focusTerm()
     el.addEventListener('pointerdown', focusTerm)
+    // 通过 xterm 的专用按键入口接管 Tab；外层 DOM 监听会与 xterm 的 textarea
+    // 处理顺序冲突，可能只阻止焦点切换，却没有把补全键可靠地交给 shell。
+    term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return true
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.type === 'keydown' && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(event.shiftKey ? '\x1b[Z' : '\t')
+      }
+      return false
+    })
     const scope = splitEnv?.getScope?.()
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const url = proto + '//' + location.host + '/api/worktable/term?sessionId=' + encodeURIComponent(scope?.sessionId ?? '') + '&cwd=' + encodeURIComponent(scope?.cwd ?? '') + '&cols=80&rows=24'
@@ -2730,6 +2753,7 @@ function TerminalPane() {
     return () => {
       disposed = true
       try { unsubTheme() } catch {}
+      el.removeEventListener('pointerdown', focusTerm)
       ro.disconnect()
       try { ws?.close() } catch {}
       try { term.dispose() } catch {}
@@ -3093,7 +3117,8 @@ function CustomPane(props: { paneTitle?: string }) {
     const list = custom?.getProjects?.() ?? []
     setProjects(list)
     const cur = custom?.currentProjectId?.() ?? null
-    setProjectId(cur && list.some((p) => p.id === cur) ? cur : (list[0]?.id ?? null))
+    const initialProjectId = cur && list.some((p) => p.id === cur) ? cur : (list[0]?.id ?? null)
+    setProjectId(initialProjectId)
     setWsGroups((custom?.getWorkspaces?.() ?? []).map((w) => ({ id: w.id, title: w.title, path: w.path })))
     custom?.getSessions?.().then((res) => {
       setSessionGroups(res.groups)
@@ -3641,7 +3666,7 @@ function WorkspaceLayer(props: { spec: LayoutSpec; geom: Geom | null; chatW: num
         }
       }}
     >
-      {!it.pane.collapsed && !singleConsole && (
+      {!singleConsole && (
       <div
         className="dsh-mt_paneBar"
         title={T('split.dragSwap')}
@@ -3659,11 +3684,7 @@ function WorkspaceLayer(props: { spec: LayoutSpec; geom: Geom | null; chatW: num
         <span className="dsh-mt_paneTitle">{it.pane.title}</span>
       </div>
       )}
-      {/* 折叠态：窗格标题栏与标签栏都让位给内容，但保留一枚悬浮的窗格名小标——
-          不然折叠后分不清是「窗口几」。只读标签（pointer-events:none），点击照旧穿透到页面。 */}
-      {it.pane.collapsed && !singleConsole && (
-        <span className="dsh-mt_paneChip" data-pane-chip="1" title={it.pane.title}>{it.pane.title}</span>
-      )}
+      {/* 折叠只收起标签栏；窗格标题和操作键仍占独立一行，避免覆盖网页内容。 */}
       <PaneBody pane={it.pane} row={row} index={index} />
       {!singleConsole && (
         <>

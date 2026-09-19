@@ -7,6 +7,7 @@ import {
   defaultPromptWorkspaceState,
   newPromptTemplate,
   newPromptWorkspace,
+  normalizePromptTemplateFile,
   normalizePromptWorkspaceState,
   type PromptConstraint,
   type PromptTemplate,
@@ -34,14 +35,34 @@ function parentPath(path: string): string {
   return at <= 2 ? normalized.slice(0, at + 1) : normalized.slice(0, at)
 }
 
-function downloadState(state: PromptWorkspaceState): void {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' })
+function constraintPath(path: string, isDir: boolean, cwd: string): string {
+  const target = path.replace(/\\/g, '/').replace(/\/+$/, '')
+  const root = cwd.replace(/\\/g, '/').replace(/\/+$/, '')
+  const windowsPath = /^[a-z]:\//i.test(root)
+  const comparableTarget = windowsPath ? target.toLowerCase() : target
+  const comparableRoot = windowsPath ? root.toLowerCase() : root
+  const insideWorkspace = !!root && (comparableTarget === comparableRoot || comparableTarget.startsWith(comparableRoot + '/'))
+  if (!insideWorkspace) return path
+  const relative = target.slice(root.length).replace(/^\/+/, '')
+  return '@' + relative + (isDir && relative && !relative.endsWith('/') ? '/' : '')
+}
+
+function downloadJson(value: unknown, fileName: string): void {
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = 'dsh-mytable-prompt-workspaces.json'
+  link.download = fileName
   link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+function downloadState(state: PromptWorkspaceState): void {
+  downloadJson(state, 'dsh-mytable-prompt-workspaces.json')
+}
+
+function fileSafeName(value: string): string {
+  return value.trim().replace(/[<>:"/\\|?*\u0000-\u001f]+/g, '-').replace(/[. ]+$/g, '').slice(0, 80) || 'template'
 }
 
 export function PromptWorkspacesPane() {
@@ -60,6 +81,7 @@ export function PromptWorkspacesPane() {
     try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1' } catch { return false }
   })
   const importRef = useRef<HTMLInputElement | null>(null)
+  const templateImportRef = useRef<HTMLInputElement | null>(null)
   const templateDragIdRef = useRef<string | null>(null)
 
   const workspace = state.workspaces.find((w) => w.id === state.selectedWorkspaceId) ?? state.workspaces[0]
@@ -106,9 +128,10 @@ export function PromptWorkspacesPane() {
 
   const chooseEntry = (entry: Entry): void => {
     if (!picker) return
+    const value = constraintPath(entry.path, entry.isDir, splitScope()?.cwd ?? '')
     update((draft) => {
       const constraint = editTemplate(draft).constraints.find((c) => c.id === picker.constraintId)
-      if (constraint) constraint.path = entry.path
+      if (constraint) constraint.path = value
     })
     if (entry.isDir) setPicker((current) => current ? { ...current, selectedPath: entry.path } : current)
     else setPicker(null)
@@ -139,6 +162,27 @@ export function PromptWorkspacesPane() {
     } catch (error) {
       setStatus('导入失败：' + String(error instanceof Error ? error.message : error))
     }
+  }
+
+  const importTemplateFile = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    try {
+      const imported = normalizePromptTemplateFile(JSON.parse(await file.text()))
+      update((draft) => {
+        editWorkspace(draft).templates.push(imported)
+        draft.selectedTemplateId = imported.id
+      })
+      setTimeout(() => setStatus(`已导入模板：${imported.name}`), 0)
+    } catch (error) {
+      setStatus('模板导入失败：' + String(error instanceof Error ? error.message : error))
+    }
+  }
+
+  const exportCurrentTemplate = (): void => {
+    downloadJson({ kind: 'dsh-mytable-prompt-template', version: 1, template }, `dsh-mytable-template-${fileSafeName(template.name)}.json`)
+    setStatus(`已导出模板：${template.name}`)
   }
 
   const fillCurrentDraft = (): void => {
@@ -200,12 +244,17 @@ export function PromptWorkspacesPane() {
 
         <section className="dsh-mt_pwCard dsh-mt_pwTemplate">
           <input aria-label="模板名称" value={template.name} onChange={(event) => update((draft) => { editTemplate(draft).name = event.target.value })} />
-          <button type="button" className="dsh-mt_pwDanger" disabled={workspace.templates.length <= 1} onClick={() => {
-            if (workspace.templates.length <= 1 || !confirm(`删除模板“${template.name}”？`)) return
-            update((draft) => {
-              const ws = editWorkspace(draft); ws.templates = ws.templates.filter((t) => t.id !== template.id); draft.selectedTemplateId = ws.templates[0].id
-            })
-          }}>删除模板</button>
+          <span className="dsh-mt_pwTemplateActions">
+            <button type="button" onClick={() => templateImportRef.current?.click()}>导入模板</button>
+            <button type="button" onClick={exportCurrentTemplate}>导出模板</button>
+            <button type="button" className="dsh-mt_pwDanger" disabled={workspace.templates.length <= 1} onClick={() => {
+              if (workspace.templates.length <= 1 || !confirm(`删除模板“${template.name}”？`)) return
+              update((draft) => {
+                const ws = editWorkspace(draft); ws.templates = ws.templates.filter((t) => t.id !== template.id); draft.selectedTemplateId = ws.templates[0].id
+              })
+            }}>删除模板</button>
+            <input ref={templateImportRef} hidden type="file" accept=".json,application/json" onChange={(event) => void importTemplateFile(event)} />
+          </span>
         </section>
 
         <section className="dsh-mt_pwCard">
@@ -215,9 +264,16 @@ export function PromptWorkspacesPane() {
               const item = editTemplate(draft).constraints.find((c) => c.id === constraint.id); if (item) item.path = event.target.value
             })} />
             <select value={constraint.mode} onChange={(event) => update((draft) => {
-              const item = editTemplate(draft).constraints.find((c) => c.id === constraint.id); if (item) item.mode = event.target.value === 'editable' ? 'editable' : 'read'
-            })}><option value="read">仅阅读</option><option value="editable">可编辑</option></select>
-            <button type="button" onClick={() => void loadDirectory(constraint.id, splitScope()?.cwd ?? '', constraint.path)}>选择文件或文件夹</button>
+              const item = editTemplate(draft).constraints.find((c) => c.id === constraint.id); if (item) item.mode = event.target.value as PromptConstraint['mode']
+            })}>
+              <option value="read">仅阅读</option>
+              <option value="editable">可编辑</option>
+              <option value="confirm">修改前确认</option>
+              <option value="blocked">禁止访问</option>
+              <option value="create">只能新增</option>
+              <option value="append">只能追加</option>
+            </select>
+            <button type="button" onClick={() => void loadDirectory(constraint.id, splitScope()?.cwd ?? '')}>选择文件或文件夹</button>
             <input className="dsh-mt_pwNote" value={constraint.note} placeholder="针对这个文件的一句话限制（可选）" onChange={(event) => update((draft) => {
               const item = editTemplate(draft).constraints.find((c) => c.id === constraint.id); if (item) item.note = event.target.value
             })} />
@@ -245,7 +301,7 @@ export function PromptWorkspacesPane() {
           <div className="dsh-mt_pwCardHead"><strong>3. 当前需求</strong><span>始终位于最下面；填入成功后清空</span></div>
           <textarea className="dsh-mt_pwNeed" value={requirement} placeholder="输入这一次要 AI 完成的具体需求…" onChange={(event) => setRequirement(event.target.value)} />
           <details><summary>预览最终文案</summary><pre>{preview}</pre></details>
-          <div className="dsh-mt_pwSubmit"><span data-error={status.startsWith('导入失败')}>{status}</span><button type="button" disabled={!requirement.trim()} onClick={fillCurrentDraft}>填入当前聊天框</button></div>
+          <div className="dsh-mt_pwSubmit"><span data-error={status.includes('失败')}>{status}</span><button type="button" disabled={!requirement.trim()} onClick={fillCurrentDraft}>填入当前聊天框</button></div>
         </section>
       </main>
 

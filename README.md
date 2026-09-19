@@ -81,16 +81,19 @@ npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.0.tgz
 npx --yes @deepseek-ai/dsh web
 ```
 
-### 方法二：克隆仓库后安装仓库内的安装包
+### 方法二：克隆仓库后直接安装
 
 ```bash
 git clone https://github.com/clint-sfy/dsh-mytable.git
 cd dsh-mytable
+npm install
+npm run build
+npm pack
 npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.0.tgz
 npx --yes @deepseek-ai/dsh web
 ```
 
-这里安装的是仓库内已经打包好的 `.tgz`，不是直接从源码目录建立链接。对于 Windows 和独立插件项目，这种方式通常更稳定。
+仓库已经自带 `vendor/dsh-flowglass-0.5.0.tgz`，不需要额外下载或克隆 `dsh-flowglass`。`npm pack` 生成的 `dsh-mytable-0.1.0.tgz` 也会内置运行所需的 Flowglass 依赖。
 
 ## 第一次部署 DSH
 
@@ -213,24 +216,15 @@ npx --yes @deepseek-ai/dsh plugin --profile web remove dsh-mytable
 
 ## 本地开发与打包
 
-当前开发工作区同时包含 `dsh-mytable` 和 `dsh-flowglass`：
-
-```text
-work_table/
-├─ dsh-mytable/
-└─ dsh-flowglass/
-```
-
-`dsh-mytable` 的开发依赖通过相邻目录中的 `dsh-flowglass` 安装包解析。普通用户不需要准备这个目录，发布的 `dsh-mytable-*.tgz` 已经包含运行所需的 `dsh-flowglass`。
-
-在完整开发工作区中执行：
+只需要克隆本仓库，然后在仓库根目录执行：
 
 ```bash
-cd dsh-mytable
 npm install
 npm run build
 npm pack
 ```
+
+Flowglass 依赖已保存在仓库内的 `vendor/` 目录；无需在本仓库旁边准备其他项目目录。
 
 生成：
 

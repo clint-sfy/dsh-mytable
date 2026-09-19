@@ -1131,6 +1131,8 @@ function WorktableSection(props: any) {
   const [metas, setMetas] = useState<Record<string, ProjectMeta>>({})
   const [registeredIds, setRegisteredIds] = useState<string[]>(() => [...registryStore.ids])
   const [addOpen, setAddOpen] = useState(false)
+  const [addPresentation, setAddPresentation] = useState<'sidebar' | 'console'>('sidebar')
+  const [addAnchorTop, setAddAnchorTop] = useState<number | null>(null)
   const [viewOptionsOpen, setViewOptionsOpen] = useState(false)
   // 更新检查：徽标 / 更新卡 / 版本行共用；节流一天一次，忽略按版本号存 localStorage
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
@@ -1190,6 +1192,9 @@ function WorktableSection(props: any) {
   const [wsPreset, setWsPreset] = useState<string>('2h')
   const [wsName, setWsName] = useState('')
   const [wsError, setWsError] = useState(false)
+  const [wsSessionId, setWsSessionId] = useState('')
+  const [wsSessionError, setWsSessionError] = useState(false)
+  const [wsSessionGroups, setWsSessionGroups] = useState<{ title: string; sessions: { id: string; title: string; isCurrent: boolean }[] }[]>([])
   // 新建项目强制工作文件夹：经「选择位置…」弹窗选定（系统资源管理器式选择窗）
   const [wsFolderParent, setWsFolderParent] = useState('')
   const [wsFolderError, setWsFolderError] = useState(false)
@@ -1228,8 +1233,6 @@ function WorktableSection(props: any) {
   const copyToastTimerRef = useRef<number | null>(null)
   /** 删除二次确认：kind + 目标 id + 显示名 */
   const [requestDelete, setRequestDelete] = useState<{ kind: 'layout' | 'shortcut' | 'project'; id: string; name: string } | null>(null)
-  /** 变更视图：正在挑选新拓扑的布局 id */
-  const [viewPickFor, setViewPickFor] = useState<string | null>(null)
   const [float, setFloat] = useState<FloatRect | null>(() =>
     view.dock === 'float' && view.floatTop != null ? { top: view.floatTop } : null,
   )
@@ -1359,13 +1362,20 @@ function WorktableSection(props: any) {
   }
 
   /** 打开「添加项目」面板（侧栏 ＋ 与控制室创建卡共用）：默认父目录 = 当前会话工作目录 */
-  const openAddPanel = () => {
+  const openAddPanel = (presentation: 'sidebar' | 'console' = 'console') => {
+    setAddPresentation(presentation)
     setAddOpen(true)
     setViewOptionsOpen(false)
-    if (!wsFolderParent) {
-      const cwd = sessionScopeStore.snapshot?.cwd ?? ''
-      if (cwd) setWsFolderParent(cwd)
-    }
+    const cwd = sessionScopeStore.snapshot?.cwd ?? ''
+    if (!wsFolderParent && cwd) setWsFolderParent(cwd)
+    setWsSessionError(false)
+    fetchSessionGroups().then((res) => {
+      setWsSessionGroups(res.groups)
+      if (!wsSessionId) {
+        const sessions = res.groups.flatMap((g) => g.sessions)
+        setWsSessionId(sessions.find((s) => s.isCurrent)?.id ?? sessions[0]?.id ?? '')
+      }
+    }).catch(() => setWsSessionGroups([]))
   }
 
   // 会话作用域（当前会话 + 工作目录）与后台任务：注入分栏引擎环境
@@ -1484,7 +1494,7 @@ function WorktableSection(props: any) {
           if (previewTimer != null) { window.clearTimeout(previewTimer); previewTimer = null }
           sweepPreviews()
         },
-        onAdd: () => openAddPanel(),
+        onAdd: () => openAddPanel('console'),
         onOpen: (id) => {
           if (id === CONSOLE_ID) return
           const pr = projectsRef.current.projects
@@ -2326,6 +2336,7 @@ function buildCustomLayoutPrompt(req: string): string {
   const saveLayout = async () => {
     const name = wsName.trim()
     if (!name) { setWsError(true); return }
+    if (!wsSessionId) { setWsSessionError(true); return }
     const folderPath = wsFolderParent.trim()
     if (!folderPath) { setWsFolderError(true); return }
     if (!isAbs(folderPath)) { setWsFolderError(true); return }
@@ -2335,9 +2346,14 @@ function buildCustomLayoutPrompt(req: string): string {
       if (!r.ok) { setWsFolderError(true); setPickErr((prev) => ({ ...prev, add: t('add.folderCreateFail') })); return }
     } catch { setWsFolderError(true); setPickErr((prev) => ({ ...prev, add: t('add.folderCreateFail') })); return }
     const layout = buildLayout(wsPreset, name)
-    persistProjects((prev) => ({ ...prev, layouts: [...prev.layouts, layout], folders: { ...prev.folders, [layout.id]: folderPath } }))
+    persistProjects((prev) => ({
+      ...prev,
+      layouts: [...prev.layouts, layout],
+      folders: { ...prev.folders, [layout.id]: folderPath },
+      bindings: { ...prev.bindings, [layout.id]: wsSessionId },
+    }))
     invalidatePickState() // 保存成功：失效在途选择请求（防止旧选择器稍后返回写回已重置的表单）
-    setWsName(''); setWsFolderParent(''); setWsError(false); setWsFolderError(false)
+    setWsName(''); setWsSessionId(''); setWsSessionGroups([]); setWsFolderParent(''); setWsError(false); setWsSessionError(false); setWsFolderError(false)
     setAddOpen(false)
     openSplit(layout)
     reportUsed(layout.id)
@@ -2345,60 +2361,6 @@ function buildCustomLayoutPrompt(req: string): string {
 
   const removeLayout = (id: string) => {
     persistProjects((prev) => ({ ...prev, layouts: prev.layouts.filter((l) => l.id !== id) }))
-  }
-
-  // ── 变更视图：所有项目通用。布局项目 = 重建其布局条目；入驻项目 = 建立/更新视图覆盖。
-  // 现有窗内容（标签）按序迁入新拓扑，不丢失。 ──
-  const applyLayoutChange = (id: string, presetId: string) => {
-    const layout = projects.layouts.find((l) => l.id === id)
-    const meta = metas[id]
-    const current = layout ?? projects.views[id]
-    const sources = current
-      ? [...(current.top ?? []), ...current.main]
-          .map((pp) => pp.tabs ?? [])
-          .filter((tabs) => tabs.length > 0)
-      : []
-    const next = buildLayout(presetId, layout ? layout.title : (meta?.name ?? id))
-    next.id = id
-    next.icon = layout ? layout.icon : (projects.iconOverrides[id] ?? meta?.icon)
-    const targets = [...(next.left ? [next.left] : []), ...(next.top ?? []), ...next.main]
-    let si = 0
-    for (const pane of targets) {
-      if (si < sources.length) {
-        pane.tabs = sources[si]
-        pane.active = 0
-        pane.content = null
-        si++
-      }
-    }
-    const overflow = sources.slice(si).flat()
-    if (overflow.length > 0 && targets.length > 0) {
-      const last = targets[targets.length - 1]
-      last.tabs = [...(last.tabs ?? []), ...overflow]
-      last.active = 0
-    }
-    persistProjects((prev) => layout
-      ? { ...prev, layouts: prev.layouts.map((l) => (l.id === id ? next : l)) }
-      : { ...prev, views: { ...prev.views, [id]: next } })
-    // 该视图当前打开时：关旧开新，工作区即时变为新视图
-    const wasOpen = splitStore.active && splitStore.spec?.id === id
-    if (wasOpen) {
-      splitStore.close()
-      openSplit(next)
-    }
-    setViewPickFor(null)
-  }
-
-  /** 布局当前拓扑对应的预设 id（用于视图选择器高亮） */
-  const presetOf = (l: LayoutSpec): string => {
-    const leftCount = l.left ? 1 : 0
-    const topCount = (l.top ?? []).length
-    const contentCount = l.main.length
-    const chatFull = l.chatFullHeight === true
-    const def = PRESET_DEFS.find((d) =>
-      d.leftCount === leftCount && d.topCount === topCount && d.contentCount === contentCount && d.chatFull === chatFull,
-    )
-    return def ? def.id : '2h'
   }
 
   // ── 删除（全部走二次确认；项目彻底移出工作台：对话与项目文件均保留，仅清理本地关联状态） ──
@@ -2768,13 +2730,12 @@ function buildCustomLayoutPrompt(req: string): string {
             className="dsh-mt_iconBtn"
             aria-label={t('menu.add')}
             title={t('menu.add')}
-            onClick={() => {
+            onClick={(e) => {
               invalidatePickState()
-              setAddOpen((v) => !v); setViewOptionsOpen(false)
-              // 父目录默认 = 当前会话工作目录（不落 C 盘默认位置）
-              if (!wsFolderParent) {
-                const cwd = sessionScopeStore.snapshot?.cwd ?? ''
-                if (cwd) setWsFolderParent(cwd)
+              if (addOpen) setAddOpen(false)
+              else {
+                setAddAnchorTop((e.currentTarget as HTMLElement).getBoundingClientRect().top)
+                openAddPanel('sidebar')
               }
             }}
           >{ICON_ADD}</button>
@@ -2798,12 +2759,35 @@ function buildCustomLayoutPrompt(req: string): string {
 
       {addOpen && <div className="dsh-mt_popBackdrop" onClick={() => { invalidatePickState(); setAddOpen(false) }} />}
       {addOpen && (
-        <div className="dsh-mt_menu dsh-mt_add dsh-mt_pop" style={{ position: 'fixed', left: popLeft, top: popTop, width: 360, zIndex: 80 }}>
+        <div
+          className={'dsh-mt_menu dsh-mt_add dsh-mt_pop' + (addPresentation === 'console' ? ' dsh-mt_addConsole' : '')}
+          style={addPresentation === 'console'
+            ? { position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: 'min(520px,calc(100vw - 32px))', zIndex: 80 }
+            : { position: 'fixed', left: popLeft, top: clamp(addAnchorTop ?? popTop, MIN_TOP, window.innerHeight - 120), width: 360, maxHeight: `calc(100vh - ${clamp(addAnchorTop ?? popTop, MIN_TOP, window.innerHeight - 120)}px - 12px)`, overflow: 'auto', zIndex: 80 }}
+        >
           {/* 布局选择已下线：新项目一律用固定布局（内容窗在左、聊天框右侧满高），见 buildLayout */}
           <span className="dsh-mt_menuLabel">{t('add.newProject')}</span>
           <div className="dsh-mt_addForm">
             <input type="text" placeholder={t('add.layoutNamePh')} value={wsName}
               onChange={(e) => { setWsName(e.target.value); setWsError(false) }} />
+            <div className="dsh-mt_addFolderRow">
+              <span className="dsh-mt_customLabel">{t('add.session')}</span>
+              <select
+                className="dsh-mt_sessionSelect"
+                value={wsSessionId}
+                onChange={(e) => {
+                  setWsSessionId(e.target.value)
+                  setWsSessionError(false)
+                }}
+              >
+                <option value="">{wsSessionGroups.length > 0 ? t('add.sessionNone') : t('add.sessionEmpty')}</option>
+                {wsSessionGroups.map((g, gi) => (
+                  <optgroup key={g.title || 'g' + gi} label={g.title || t('add.sessionUngrouped')}>
+                    {g.sessions.map((s) => <option key={s.id} value={s.id}>{s.title}{s.isCurrent ? ' · ' + t('add.sessionCurrent') : ''}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
             <div className="dsh-mt_addFolderRow">
               <span className="dsh-mt_customLabel">{t('add.folderParent')}</span>
               <span className={'dsh-mt_addFolderPath' + (wsFolderParent ? '' : ' dsh-mt_addFolderPathNone')} title={wsFolderParent || ''}>
@@ -2829,6 +2813,7 @@ function buildCustomLayoutPrompt(req: string): string {
             <button type="button" className="dsh-mt_addBtn" onClick={saveLayout}>{t('add.layoutSave')}</button>
           </div>
           {wsError && <p className="dsh-mt_addError">{t('add.layoutInvalid')}</p>}
+          {wsSessionError && <p className="dsh-mt_addError">{t('add.sessionRequired')}</p>}
           {wsFolderError && <p className="dsh-mt_addError">{t('add.folderRequired')}</p>}
         </div>
       )}
@@ -2942,7 +2927,6 @@ function buildCustomLayoutPrompt(req: string): string {
                 <button type="button" className="dsh-mt_manageBtn" title={isHidden ? t('manage.show') : t('manage.hide')} onClick={() => toggleHidden(id)}>
                   <EyeIcon closed={isHidden} />
                 </button>
-                <button type="button" className="dsh-mt_manageBtn" title={t('manage.changeView')} onClick={() => setViewPickFor(id)}>🧩</button>
                 <button
                   type="button"
                   className="dsh-mt_manageBtn"
@@ -2981,34 +2965,6 @@ function buildCustomLayoutPrompt(req: string): string {
                 <span className="dsh-mt_updateSwitch" data-off={updateCheckOn ? undefined : 'true'} />
               </span>
             </span>
-          </div>
-        </div>
-      )}
-
-      {viewPickFor && <div className="dsh-mt_popBackdrop" style={{ zIndex: 81 }} onClick={() => setViewPickFor(null)} />}
-      {viewPickFor && (
-        <div className="dsh-mt_menu dsh-mt_pop" style={{ position: 'fixed', left: popLeft, top: popTop, width: 320, zIndex: 82 }}>
-          <span className="dsh-mt_menuLabel">{t('viewPick.title')}</span>
-          <div className="dsh-mt_presets">
-            {PRESET_DEFS.map((def) => {
-              const cur = projects.layouts.find((l) => l.id === viewPickFor) ?? projects.views[viewPickFor]
-              return (
-                <button
-                  key={def.id}
-                  type="button"
-                  className="dsh-mt_preset"
-                  data-on={cur && presetOf(cur) === def.id ? 'true' : 'false'}
-                  onClick={() => applyLayoutChange(viewPickFor, def.id)}
-                >
-                  {presetThumb(def.id)}
-                </button>
-              )
-            })}
-            <button type="button" className="dsh-mt_preset dsh-mt_presetAdd" title={t('customLayout.addTitle')}
-              onClick={() => { setViewPickFor(null); setCustomOpen(true) }}>
-              <span className="dsh-mt_presetAddIcon" aria-hidden>＋</span>
-              <span className="dsh-mt_presetAddText">{t('customLayout.add')}</span>
-            </button>
           </div>
         </div>
       )}
