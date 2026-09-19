@@ -1,0 +1,12 @@
+{
+  "name": "dsh-mytable",
+  "description": "工作台：DSH 标准插件包形式的 agent 级项目容器（应用抽屉 + 分栏工作区 + 控制室）",
+  "version": "0.1.0",
+  "entry": {
+    "name": "dsh-mytable",
+    "inject": []
+  },
+  "client": {
+    "platform": "web"
+  }
+}

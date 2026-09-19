@@ -1,0 +1,17 @@
+# dsh-mytable bundle patch（dsh.bundle.patch 层）
+#
+# 通过官方 CLI 安装时——
+#
+#   dsh plugin --profile mytable add <dsh-mytable 包路径或 tarball>
+#
+# ——命令会把声明了 dsh.bundle 的依赖追加进 profile 的 dsh.profile.bundles，
+# 启动时本文件的 insert 行即挂载插件行（与手动 cordis.patch.yml 挂载等价）。
+#
+# 行 id/name 必须等于包名（dsh-mytable）：客户端模块系统的 id = 入口解析到的
+# package.json name，客户端 bundle 的 __ModuleLoader__.load({ id }) 必须同名。
+- insert:
+    - id: dsh-mytable
+      name: dsh-mytable
+    # 随 dsh-mytable tarball 一起内嵌的原版流镜 Host + Client；用户无需再单独安装。
+    - id: dsh-mytable-flowglass
+      name: dsh-flowglass

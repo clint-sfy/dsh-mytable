@@ -1,0 +1,10 @@
+# 依赖与本地工具缓存（npm 缓存走包内 .npm-cache，避免动全局 npm cache）
+node_modules/
+.npm-cache/
+
+# 本地临时（浏览器验收截图 .tmp/mytable.png 等）
+.tmp/
+*.log
+dist/
+
+# 说明：lib/（构建产物）与 *.tgz（打包产物）都保留在工作区，安装与排查都用得上
