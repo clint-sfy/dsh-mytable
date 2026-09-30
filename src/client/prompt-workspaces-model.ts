@@ -1,3 +1,5 @@
+import { DEFAULT_PROMPT_WORKSPACE_ICON, normalizeWorkspaceIcon } from './icon-set.ts'
+
 export type PromptAccessMode = 'read' | 'editable' | 'confirm' | 'blocked' | 'create' | 'append'
 export type PromptConstraint = { id: string; path: string; mode: PromptAccessMode; note: string }
 export type PromptTemplate = { id: string; name: string; constraints: PromptConstraint[]; fixedTexts: string[] }
@@ -17,7 +19,7 @@ export function newPromptTemplate(name = 'PRD 编程'): PromptTemplate {
 
 export function newPromptWorkspace(name = '代码编程工作区'): PromptWorkspace {
   const first = newPromptTemplate()
-  return { id: uid(), name, icon: '💻', templates: [first, newPromptTemplate('Todo 撰写'), newPromptTemplate('测试撰写')] }
+  return { id: uid(), name, icon: DEFAULT_PROMPT_WORKSPACE_ICON, templates: [first, newPromptTemplate('Todo 撰写'), newPromptTemplate('测试撰写')] }
 }
 
 export function defaultPromptWorkspaceState(): PromptWorkspaceState {
@@ -67,7 +69,12 @@ export function normalizePromptWorkspaceState(input: unknown): PromptWorkspaceSt
     if (!Array.isArray(item.templates)) throw new Error(`第 ${wi + 1} 个工作区缺少模板`)
     const templates: PromptTemplate[] = item.templates.map(normalizeTemplate)
     if (templates.length === 0) templates.push(newPromptTemplate())
-    return { id: str(item.id) || uid(), name: str(item.name).trim() || `工作区 ${wi + 1}`, icon: str(item.icon) || '💻', templates }
+    return {
+      id: str(item.id) || uid(),
+      name: str(item.name).trim() || `工作区 ${wi + 1}`,
+      icon: normalizeWorkspaceIcon(item.icon, DEFAULT_PROMPT_WORKSPACE_ICON),
+      templates,
+    }
   })
   if (workspaces.length === 0) workspaces.push(newPromptWorkspace())
   const selectedWorkspace = workspaces.find((w) => w.id === raw.selectedWorkspaceId) ?? workspaces[0]

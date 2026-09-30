@@ -13,7 +13,18 @@ import { WorktableSettingsSection, setSettingsT, settingsSectionLabel } from './
 import { photoStore, kindOf } from './photoStore'
 import { DEFAULT_BG_SVG, b64ToBlob } from './defaultBg'
 import { WAVE_BG_B64 } from './waveBg'
-import { WORKSPACE_ICONS } from './icon-set'
+import {
+  applyWorkspaceIconToElement,
+  clearWorkspaceIconOverride,
+  DEFAULT_CONSOLE_ICON,
+  DEFAULT_LAYOUT_ICON,
+  DEFAULT_PROJECT_ICON,
+  DEFAULT_SHORTCUT_ICON,
+  normalizeWorkspaceIcon,
+  WORKSPACE_ICONS,
+} from './icon-set'
+import { WorkspaceIcon } from './icon-renderer'
+import { isDesktopApp } from './desktop-compat'
 
 /**
  * dsh-mytable 客户端（v2）：侧边栏底部「工作台」区块。
@@ -39,7 +50,7 @@ const UPDATE_REPO = ''
 // 升级动作：本包未发布到 npm / GitHub，且仓库里不留 tarball ——
 // 升级 = 先重新构建打包，再「remove → add」重装（必须 remove：pnpm 认 lockfile 里的
 // integrity，同路径 tarball 内容变了也会跳过重装）。见包 README §5。
-const UPGRADE_CMD = 'cd C:/MyProject/deepseek/work_table/dsh-mytable; npm run build; npm pack; dsh plugin --profile mytable remove dsh-mytable; dsh plugin --profile mytable add "file:C:/MyProject/deepseek/work_table/dsh-mytable/dsh-mytable-0.1.0.tgz"'
+const UPGRADE_CMD = 'cd C:/MyProject/deepseek/work_table/dsh-mytable; npm run build; npm pack; dsh plugin --profile mytable remove dsh-mytable; dsh plugin --profile mytable add "file:C:/MyProject/deepseek/work_table/dsh-mytable/dsh-mytable-0.1.1.tgz"'
 const UPGRADE_AI = '帮我升级 dsh-mytable（工作台）：在终端执行 ' + UPGRADE_CMD + '，完成后提醒我重启 dsh --profile mytable 并刷新页面'
 // 更新提示图标（手绘 SVG，避免 emoji 跨平台渲染差异）
 const ICON_SYNC = (
@@ -169,8 +180,8 @@ const PRESET_DEFS = [
   { id: 'l23', leftCount: 0, topCount: 2, contentCount: 3, chatFull: true, topHeightRatio: 0.5 },
 ] as const
 
-/** 侧栏图标备选集（emoji）：布局/快捷方式/入驻项目的图标，点击可换（首项 🧱 为布局默认） */
-const EMOJI_SET = WORKSPACE_ICONS
+/** 侧栏图标备选集：布局/快捷方式/入驻项目共用稳定 builtin ID。 */
+const ICON_SET = WORKSPACE_ICONS
 
 /** 官方工作区头部按钮图标（自 DSH Web GUI 工作区面板取样，fill=currentColor 跟随主题） */
 const ICON_SEARCH = (
@@ -548,7 +559,7 @@ async function ensureSessionModel(sessionId: string): Promise<void> {
 
 /** 控制室（工作台自己）项目：固定 id、固定排项目列表第一位、不可删除 */
 const CONSOLE_ID = 'wt-console'
-const CONSOLE_ICON = '🖥️'
+const CONSOLE_ICON = DEFAULT_CONSOLE_ICON
 
 /** 控制室布局是否健全：主窗格首格存在 console 类型标签（旧版关标签的坏存档没有它） */
 function specHasConsoleTab(spec: LayoutSpec | undefined): boolean {
@@ -1110,6 +1121,7 @@ function RenameInput(props: { initial: string; placeholder: string; onCommit: (v
 
 function WorktableSection(props: any) {
   const wide = props.wide !== false
+  const desktop = isDesktopApp()
   const renderProjectSlot = typeof props.renderSlot === 'function' ? props.renderSlot : null
   /** locale 座席 t；宿主未安装 locale 服务时回退 zh 词典（保持独立可用）。 */
   const t = (key: WorktableKey, params?: Record<string, string>): string => {
@@ -1355,7 +1367,7 @@ function WorktableSection(props: any) {
       const layout = pr.projects.layouts.find((l) => l.id === id)
       if (!meta && !layout) continue
       const name = pr.projects.nameOverrides[id] ?? meta?.name ?? layout?.title ?? id
-      const icon = meta?.icon ?? layout?.icon ?? '🧱'
+      const icon = meta?.icon ?? layout?.icon ?? DEFAULT_PROJECT_ICON
       cards.push(make(id, name, icon, false))
     }
     return cards
@@ -2459,8 +2471,8 @@ function buildCustomLayoutPrompt(req: string): string {
           const icon = el.children[0] as HTMLElement | null
           if (icon) {
             const ovr = projects.iconOverrides[id]
-            if (ovr) icon.setAttribute('data-mt-icon', ovr)
-            else icon.removeAttribute('data-mt-icon')
+            if (ovr) applyWorkspaceIconToElement(icon, ovr, DEFAULT_PROJECT_ICON)
+            else clearWorkspaceIconOverride(icon)
           }
           // 选中态统一由工作台判定：
           // - 有视图覆盖的项目：点击恒由工作台接管 → 高亮完全跟随 activeSplitId（关闭即熄灭）；
@@ -2636,12 +2648,26 @@ function buildCustomLayoutPrompt(req: string): string {
     }
   }
 
+  if (desktop) {
+    return (
+      <div ref={rootRef} className="dsh-mt_section dsh-mt_desktopEntry">
+        <button
+          type="button"
+          className="dsh-mt_desktopBtn"
+          title="阿源的工作台"
+          aria-label="阿源的工作台"
+          onClick={() => openConsole()}
+        >阿源的工作台</button>
+      </div>
+    )
+  }
+
   if (!wide) {
     // 收起态 = 等行高的正方形圆角按钮，中间只留 emoji；点击 = 进入对应项目
     const railItems: { icon: string; name: string; onClick: (e: any) => void }[] = [
       { icon: CONSOLE_ICON, name: t('console.name'), onClick: (e) => clickConsoleCard(e.currentTarget as HTMLElement) },
       ...aliveRegisteredIds.map((id) => ({
-        icon: projects.iconOverrides[id] ?? metas[id]?.icon ?? '📦',
+        icon: projects.iconOverrides[id] ?? metas[id]?.icon ?? DEFAULT_PROJECT_ICON,
         name: projects.nameOverrides[id] ?? metas[id]?.name ?? id,
         onClick: () => openRailProject(id),
       })),
@@ -2651,7 +2677,7 @@ function buildCustomLayoutPrompt(req: string): string {
         onClick: () => { try { window.open(s.href, '_blank', 'noopener') } catch {} },
       })),
       ...projects.layouts.map((l) => ({
-        icon: l.icon ?? '🧱',
+        icon: l.icon ?? DEFAULT_LAYOUT_ICON,
         name: projects.nameOverrides[l.id] ?? l.title,
         onClick: () => openSplit(l),
       })),
@@ -2667,7 +2693,7 @@ function buildCustomLayoutPrompt(req: string): string {
           {railItems.length > 0
             ? railItems.map((it, i) => (
                 <button key={i} type="button" className="dsh-mt_railBtn" title={it.name} aria-label={it.name} onClick={it.onClick}>
-                  <span aria-hidden>{it.icon}</span>
+                  <WorkspaceIcon value={it.icon} />
                 </button>
               ))
             : <span className="dsh-mt_railIcon">≡</span>}
@@ -2824,25 +2850,25 @@ function buildCustomLayoutPrompt(req: string): string {
           <div className="dsh-mt_iconPop" style={{ left: iconPick.x, top: iconPick.y }}>
             <div className="dsh-mt_iconPopTitle">{t('icons.title')}</div>
             <div className="dsh-mt_iconGrid">
-              {EMOJI_SET.map((em) => {
+              {ICON_SET.map((icon) => {
                 const cur = iconPick.kind === 'layout'
-                  ? (projects.layouts.find((l) => l.id === iconPick.id)?.icon ?? '🧱')
+                  ? (projects.layouts.find((l) => l.id === iconPick.id)?.icon ?? DEFAULT_LAYOUT_ICON)
                   : iconPick.kind === 'shortcut'
-                    ? (projects.shortcuts.find((s) => s.id === iconPick.id)?.icon ?? '🔗')
-                    : (projects.iconOverrides[iconPick.id] ?? metas[iconPick.id]?.icon ?? '📦')
+                    ? (projects.shortcuts.find((s) => s.id === iconPick.id)?.icon ?? DEFAULT_SHORTCUT_ICON)
+                    : (projects.iconOverrides[iconPick.id] ?? metas[iconPick.id]?.icon ?? DEFAULT_PROJECT_ICON)
                 return (
                   <button
-                    key={em}
+                    key={icon}
                     type="button"
                     className="dsh-mt_iconCell"
-                    data-on={cur === em ? 'true' : 'false'}
+                    data-on={normalizeWorkspaceIcon(cur, iconPick.kind === 'layout' ? DEFAULT_LAYOUT_ICON : iconPick.kind === 'shortcut' ? DEFAULT_SHORTCUT_ICON : DEFAULT_PROJECT_ICON) === icon ? 'true' : 'false'}
                     onClick={() => {
-                      if (iconPick.kind === 'layout') setLayoutIcon(iconPick.id, em)
-                      else if (iconPick.kind === 'shortcut') setShortcutIcon(iconPick.id, em)
-                      else setProjectIcon(iconPick.id, em)
+                      if (iconPick.kind === 'layout') setLayoutIcon(iconPick.id, icon)
+                      else if (iconPick.kind === 'shortcut') setShortcutIcon(iconPick.id, icon)
+                      else setProjectIcon(iconPick.id, icon)
                       setIconPick(null)
                     }}
-                  >{em}</button>
+                  ><WorkspaceIcon value={icon} /></button>
                 )
               })}
             </div>
@@ -2915,14 +2941,14 @@ function buildCustomLayoutPrompt(req: string): string {
                       tabIndex={0}
                       title={t('icons.change')}
                       onClick={(e) => { e.stopPropagation(); openIconPick('layout', id, e.currentTarget as HTMLElement) }}
-                    >{layout.icon ?? '🧱'}</span>
+                    ><WorkspaceIcon value={layout.icon ?? DEFAULT_LAYOUT_ICON} /></span>
                   : <span
                       className="dsh-mt_manageIcon dsh-mt_iconPick"
                       role="button"
                       tabIndex={0}
                       title={t('icons.change')}
                       onClick={(e) => { e.stopPropagation(); openIconPick('project', id, e.currentTarget as HTMLElement) }}
-                    >{projects.iconOverrides[id] ?? meta?.icon ?? '📦'}</span>}
+                    ><WorkspaceIcon value={projects.iconOverrides[id] ?? meta?.icon ?? DEFAULT_PROJECT_ICON} /></span>}
                 <RenameInput initial={display} placeholder={t('manage.renamePh')} onCommit={(v) => renameProject(id, v)} />
                 <button type="button" className="dsh-mt_manageBtn" title={isHidden ? t('manage.show') : t('manage.hide')} onClick={() => toggleHidden(id)}>
                   <EyeIcon closed={isHidden} />
@@ -2938,14 +2964,14 @@ function buildCustomLayoutPrompt(req: string): string {
           })}
           {projects.shortcuts.map((s) => (
             <div key={s.id} className="dsh-mt_manageRow dsh-mt_manageRowSc">
-              <span className="dsh-mt_manageGrip" aria-hidden>🔗</span>
+              <span className="dsh-mt_manageGrip" aria-hidden><WorkspaceIcon value={DEFAULT_SHORTCUT_ICON} /></span>
               <span
                 className="dsh-mt_manageIcon dsh-mt_iconPick"
                 role="button"
                 tabIndex={0}
                 title={t('icons.change')}
                 onClick={(e) => { e.stopPropagation(); openIconPick('shortcut', s.id, e.currentTarget as HTMLElement) }}
-              >{s.icon}</span>
+              ><WorkspaceIcon value={s.icon ?? DEFAULT_SHORTCUT_ICON} /></span>
               <span className="dsh-mt_manageScName">{s.name}</span>
               <button type="button" className="dsh-mt_manageBtn" title={t('manage.deleteShortcut')} onClick={() => askDelete('shortcut', s.id, s.name)}>✕</button>
             </div>
@@ -3169,7 +3195,7 @@ function buildCustomLayoutPrompt(req: string): string {
           title={t('console.name')}
           onClick={(e) => clickConsoleCard(e.currentTarget as HTMLElement)}
         >
-          <span className="dsh-mt_layoutIcon">{CONSOLE_ICON}</span>
+          <span className="dsh-mt_layoutIcon"><WorkspaceIcon value={CONSOLE_ICON} /></span>
           <span className="dsh-mt_layoutText">
             <span className="dsh-mt_layoutName">{t('console.name')}</span>
           </span>
@@ -3206,7 +3232,7 @@ function buildCustomLayoutPrompt(req: string): string {
               tabIndex={0}
               title={t('icons.change')}
               onClick={(e) => { e.stopPropagation(); openIconPick('layout', l.id, e.currentTarget as HTMLElement) }}
-            >{l.icon ?? '🧱'}</span>
+            ><WorkspaceIcon value={l.icon ?? DEFAULT_LAYOUT_ICON} /></span>
             <span className="dsh-mt_layoutText">
               <span className="dsh-mt_layoutName">{projects.nameOverrides[l.id] ?? l.title}</span>
             </span>
@@ -3243,7 +3269,7 @@ function buildCustomLayoutPrompt(req: string): string {
                 tabIndex={0}
                 title={t('icons.change')}
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); openIconPick('shortcut', s.id, e.currentTarget as HTMLElement) }}
-              >{s.icon}</span>
+              ><WorkspaceIcon value={s.icon ?? DEFAULT_SHORTCUT_ICON} /></span>
               <span className="dsh-mt_shortcutName">{s.name}</span>
               <span className="dsh-mt_shortcutBadge">{t('shortcut.badge')}</span>
             </a>

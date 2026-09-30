@@ -15,7 +15,7 @@ test('文案严格按限制文件、固定要求、当前需求排列', () => {
   assert.ok(prompt.indexOf('【固定要求】') < prompt.indexOf('【当前需求】'))
   assert.equal(prompt.endsWith('增加导出按钮'), true)
   assert.match(prompt, /仅允许阅读，不要修改/)
-  assert.match(prompt, /允许阅读和修改/)
+  assert.match(prompt, /允许阅读、新建、修改和删除/)
 })
 
 test('导入拒绝未知版本', () => {

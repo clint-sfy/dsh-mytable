@@ -1,6 +1,6 @@
 # dsh-mytable
 
-一个面向 [DeepSeek Harness（DSH）](https://github.com/deepseek-ai/deepseek-harness) Web 界面的工作台插件。
+一个面向 [DeepSeek Harness（DSH）](https://github.com/deepseek-ai/deepseek-harness) Web 界面和官方 Desktop 应用的工作台插件。
 
 它把常用项目、文件、终端、浏览器、代码预览、Git 改动、文案模板和对话放进同一个可分栏工作区，减少在多个窗口之间来回切换。
 
@@ -23,9 +23,9 @@
 
 - Windows、macOS 或 Linux。
 - Node.js `22.19+` 或 `24+`。
-- pnpm。DSH 的插件管理命令会调用 pnpm。
+- pnpm。Web/命令行的 DSH 插件管理命令会调用 pnpm；官方 Desktop 的应用内「插件」页面使用应用自带的 pnpm。
 
-如果电脑还没有 pnpm，可以执行：
+如果要使用 Web/命令行方式而电脑还没有 pnpm，可以执行：
 
 ```bash
 corepack enable
@@ -39,12 +39,31 @@ npm install --global pnpm
 
 ## 最快安装方式
 
-推荐从 GitHub Release 安装已经构建好的 `.tgz` 文件。这样不需要在本机编译源码，也不需要允许安装脚本运行。
+推荐在官方 Desktop 应用内安装已经构建好的 `.tgz` 文件；Web 用户可以继续使用下方的 Web 安装方式。这样不需要在本机编译源码，也不需要允许安装脚本运行。
 
-发布 `v0.1.0` Release 并上传安装包后，安装命令为：
+### Desktop（首选）
+
+在官方 Desktop 的左下角紧凑入口打开「插件」页面，直接输入以下任一已确认支持的来源：
+
+- GitHub Release URL：`https://github.com/clint-sfy/dsh-mytable/releases/download/v0.1.1/dsh-mytable-0.1.1.tgz`
+- 本地下载的 `dsh-mytable-0.1.1.tgz` 文件
+
+应用内插件管理使用 Desktop 自带的 pnpm，不需要在系统中另行安装 pnpm。安装或更新后按 Desktop 的提示重新加载/重启应用。
+
+命令行仅作为高级备用方式：必须先**完全退出 Desktop**，再执行：
 
 ```bash
-npx --yes @deepseek-ai/dsh plugin --profile web add "https://github.com/clint-sfy/dsh-mytable/releases/download/v0.1.0/dsh-mytable-0.1.0.tgz"
+dsh plugin --profile desktop add "https://github.com/clint-sfy/dsh-mytable/releases/download/v0.1.1/dsh-mytable-0.1.1.tgz"
+```
+
+本地包也可以替换为 `"路径/到/dsh-mytable-0.1.1.tgz"`。完成后再启动 Desktop。
+
+### Web
+
+发布 `v0.1.1` Release 并上传安装包后，安装命令为：
+
+```bash
+npx --yes @deepseek-ai/dsh plugin --profile web add "https://github.com/clint-sfy/dsh-mytable/releases/download/v0.1.1/dsh-mytable-0.1.1.tgz"
 npx --yes @deepseek-ai/dsh web
 ```
 
@@ -61,7 +80,7 @@ http://127.0.0.1:3080
 ### 方法一：下载 Release 安装包
 
 1. 打开仓库的 [Releases](https://github.com/clint-sfy/dsh-mytable/releases)。
-2. 下载 `dsh-mytable-0.1.0.tgz`。
+2. 下载 `dsh-mytable-0.1.1.tgz`。
 3. 在下载目录打开终端。
 4. 执行安装和启动命令。
 
@@ -69,7 +88,7 @@ PowerShell 示例：
 
 ```powershell
 cd $HOME\Downloads
-npx --yes @deepseek-ai/dsh plugin --profile web add ".\dsh-mytable-0.1.0.tgz"
+npx --yes @deepseek-ai/dsh plugin --profile web add ".\dsh-mytable-0.1.1.tgz"
 npx --yes @deepseek-ai/dsh web
 ```
 
@@ -77,7 +96,7 @@ macOS / Linux 示例：
 
 ```bash
 cd ~/Downloads
-npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.0.tgz
+npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.1.tgz
 npx --yes @deepseek-ai/dsh web
 ```
 
@@ -89,11 +108,11 @@ cd dsh-mytable
 npm install
 npm run build
 npm pack
-npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.0.tgz
+npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.1.tgz
 npx --yes @deepseek-ai/dsh web
 ```
 
-仓库已经自带 `vendor/dsh-flowglass-0.5.0.tgz`，不需要额外下载或克隆 `dsh-flowglass`。`npm pack` 生成的 `dsh-mytable-0.1.0.tgz` 也会内置运行所需的 Flowglass 依赖。
+仓库已经自带 `vendor/dsh-flowglass-0.5.0.tgz`，单独 clone 这个仓库即可，不需要额外下载或克隆 `dsh-flowglass`。`npm pack` 生成的 `dsh-mytable-0.1.1.tgz` 也会内置运行所需的 Flowglass 依赖。
 
 ## 第一次部署 DSH
 
@@ -113,7 +132,7 @@ npx --yes @deepseek-ai/dsh web
 首次启动确认 DSH 正常后，按 `Ctrl+C` 停止，再安装本插件：
 
 ```bash
-npx --yes @deepseek-ai/dsh plugin --profile web add "路径/到/dsh-mytable-0.1.0.tgz"
+npx --yes @deepseek-ai/dsh plugin --profile web add "路径/到/dsh-mytable-0.1.1.tgz"
 npx --yes @deepseek-ai/dsh web
 ```
 
@@ -128,7 +147,7 @@ npm install --global @deepseek-ai/dsh pnpm
 之后命令可以简写为：
 
 ```bash
-dsh plugin --profile web add "路径/到/dsh-mytable-0.1.0.tgz"
+dsh plugin --profile web add "路径/到/dsh-mytable-0.1.1.tgz"
 dsh web
 ```
 
@@ -140,7 +159,7 @@ dsh web
 
 ```bash
 npx --yes @deepseek-ai/dsh --profile mytable --from-default-profile web --dump-config
-npx --yes @deepseek-ai/dsh plugin --profile mytable add "路径/到/dsh-mytable-0.1.0.tgz"
+npx --yes @deepseek-ai/dsh plugin --profile mytable add "路径/到/dsh-mytable-0.1.1.tgz"
 npx --yes @deepseek-ai/dsh --profile mytable
 ```
 
@@ -229,14 +248,14 @@ Flowglass 依赖已保存在仓库内的 `vendor/` 目录；无需在本仓库�
 生成：
 
 ```text
-dsh-mytable-0.1.0.tgz
+dsh-mytable-0.1.1.tgz
 ```
 
 安装本地构建：
 
 ```bash
 npx --yes @deepseek-ai/dsh plugin --profile web remove dsh-mytable
-npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.0.tgz
+npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.1.tgz
 npx --yes @deepseek-ai/dsh web
 ```
 
@@ -256,8 +275,8 @@ npm pack        # 生成可安装的 tgz
 1. 更新 `package.json`、`dsh.plugin.json` 中的版本号。
 2. 执行 `npm run build`。
 3. 执行 `npm pack`。
-4. 创建同版本 Git 标签，例如 `v0.1.0`。
-5. 创建 GitHub Release，并上传 `dsh-mytable-0.1.0.tgz`。
+4. 创建同版本 Git 标签，例如 `v0.1.1`。
+5. 创建 GitHub Release，并上传 `dsh-mytable-0.1.1.tgz`。
 6. 在 README 中把推荐安装命令固定到该版本。
 
 仓库可以添加 `dsh-plugin` topic，方便 DSH 用户发现插件。

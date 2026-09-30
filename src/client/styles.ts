@@ -27,12 +27,18 @@ function scopeCss(text: string, scope: string): string {
 export const css = xtermCss + '\n' + scopeCss(subagentViewCss, '.dsh-mt_sav') + '\n' + [
   // 区块整体
   '.dsh-mt_section{box-sizing:border-box;display:flex;flex-direction:column;gap:6px;width:100%;padding:0}',
+  '.dsh-mt_desktopEntry{padding:4px 6px 6px}',
+  '.dsh-mt_desktopBtn{display:block;width:100%;box-sizing:border-box;min-height:28px;padding:5px 8px;border:1px solid var(--dsw-alias-border-l1,#262b36);border-radius:7px;background:var(--dsw-alias-fill-l1,rgba(255,255,255,.03));color:var(--dsw-alias-label-secondary,#9aa4b2);font:inherit;font-size:11px;line-height:16px;text-align:left;cursor:pointer}',
+  '.dsh-mt_desktopBtn:hover{background:var(--dsw-alias-fill-l1,rgba(255,255,255,.08));border-color:var(--dsw-alias-state-accent-primary,#4f8ef7);color:var(--dsw-alias-label-primary,#e6e8eb)}',
   '.dsh-mt_float{min-width:176px;max-width:264px;background:var(--dsw-alias-bg-base,#0b0e14);border:1px solid var(--dsw-alias-border-l2,#3a4150);border-radius:10px;padding:8px;box-shadow:var(--dsw-shadow-lv2,0 8px 24px rgba(0,0,0,.4))}',
   '.dsh-mt_rail{pointer-events:none}',
   '.dsh-mt_railBox{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;padding:5px 3px;border:1px solid var(--dsw-alias-border-l2,#3a4150);border-radius:8px;background:var(--dsw-alias-bg-base,#0b0e14)}',
   '.dsh-mt_railBtn{flex:none;width:22px;height:22px;padding:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--dsw-alias-border-l1,#262b36);border-radius:7px;background:var(--dsw-alias-fill-l1,rgba(255,255,255,.03));color:var(--dsw-alias-label-secondary,#9aa4b2);font:inherit;font-size:13px;line-height:1;cursor:pointer;pointer-events:auto}',
   '.dsh-mt_railBtn:hover{background:var(--dsw-alias-fill-l1,rgba(255,255,255,.08));border-color:var(--dsw-alias-state-accent-primary,#4f8ef7);color:var(--dsw-alias-label-primary,#e6e8eb)}',
   '.dsh-mt_railIcon{font-size:17px;line-height:22px}',
+  '.dsh-mt_workspaceIcon{display:inline-flex;flex:none;align-items:center;justify-content:center;width:1em;height:1em;line-height:1;vertical-align:middle}',
+  '.dsh-mt_workspaceIcon>svg{display:block;width:100%;height:100%}',
+  '.dsh-mt_workspaceIcon>[data-workspace-icon-fallback]{display:block;max-width:2em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82em;line-height:1}',
   // 分隔线
   '.dsh-mt_divider{flex:none;height:1px;background:var(--dsw-alias-border-l1,#262b36);margin:2px 0}',
   // 头部
@@ -321,15 +327,12 @@ export const css = xtermCss + '\n' + scopeCss(subagentViewCss, '.dsh-mt_sav') + 
   '.dsh-mt_iconCell{display:flex;align-items:center;justify-content:center;aspect-ratio:1;border:1px solid transparent;border-radius:6px;background:transparent;font-size:17px;line-height:1;cursor:pointer;padding:0}',
   '.dsh-mt_iconCell:hover{background:var(--dsw-alias-fill-l1,rgba(255,255,255,.05));border-color:var(--dsw-alias-border-l2,#3a4150)}',
   '.dsh-mt_iconCell[data-on=true]{background:var(--dsw-alias-fill-l1,rgba(255,255,255,.08));border-color:var(--dsw-alias-state-accent-primary,#4f8ef7)}',
-  // 可点图标（布局卡 / 管理行 / 快捷方式上的图标，点击换 emoji）
+  // 可点图标（布局卡 / 管理行 / 快捷方式上的图标，点击更换内置图标）
   '.dsh-mt_iconPick{flex:none;display:inline-flex;align-items:center;justify-content:center;padding:1px;border:none;background:transparent;cursor:pointer;border-radius:4px}',
   '.dsh-mt_iconPick:hover{background:var(--dsw-alias-fill-l1,rgba(255,255,255,.08))}',
   // 四类项目卡片统一竖向高度（常驻×2 / 布局 / 快捷方式；新建条目自动继承）
   '.dsh-mt_projects [data-mt-id],.dsh-mt_layout,.dsh-mt_shortcut{height:34px;box-sizing:border-box}',
-  // 入驻项目卡片图标覆盖：data-mt-icon 存在时用 attr() 替换显示（原字符字号压到 0）
-  '.dsh-mt_projects [data-mt-id] > :first-child[data-mt-icon]{font-size:0;line-height:20px}',
-  '.dsh-mt_projects [data-mt-id] > :first-child[data-mt-icon]::before{content:attr(data-mt-icon);font-size:15px;line-height:20px}',
-  // 常驻项目卡片与新建项目统一：emoji 字号 15px、名称不加粗
+  // 常驻项目卡片与新建项目统一：图标字号 15px、名称不加粗
   '.dsh-mt_projects [data-mt-id] > :first-child{font-size:15px;line-height:20px}',
   '.dsh-mt_projects [data-mt-id] > :nth-child(2) > :first-child{font-weight:400}',
   // 头部按钮内的官方 SVG 图标

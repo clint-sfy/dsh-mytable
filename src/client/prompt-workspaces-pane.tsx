@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { replaceDraft } from './reference-in-chat'
 import { splitScope } from './split'
 import { WORKSPACE_ICONS } from './icon-set'
+import { WorkspaceIcon } from './icon-renderer'
 import {
   buildWorkspacePrompt,
   defaultPromptWorkspaceState,
@@ -208,7 +209,7 @@ export function PromptWorkspacesPane() {
         </div>
         <div className="dsh-mt_pwWsList">
           {state.workspaces.map((item) => <div className="dsh-mt_pwWsItem" key={item.id} data-active={item.id === workspace.id}>
-            <button className="dsh-mt_pwWsIcon" type="button" title="更换工作区图标" aria-label={`更换 ${item.name} 的图标`} onClick={() => setIconWorkspaceId((value) => value === item.id ? null : item.id)}>{item.icon}</button>
+            <button className="dsh-mt_pwWsIcon" type="button" title="更换工作区图标" aria-label={`更换 ${item.name} 的图标`} onClick={() => setIconWorkspaceId((value) => value === item.id ? null : item.id)}><WorkspaceIcon value={item.icon} /></button>
             <button className="dsh-mt_pwWsName" type="button" onClick={() => update((draft) => {
               const next = draft.workspaces.find((w) => w.id === item.id)!
               draft.selectedWorkspaceId = next.id; draft.selectedTemplateId = next.templates[0].id
@@ -310,7 +311,7 @@ export function PromptWorkspacesPane() {
         <div className="dsh-mt_pwIconGrid">{WORKSPACE_ICONS.map((icon) => <button type="button" key={icon} onClick={() => {
           update((draft) => { const item = draft.workspaces.find((value) => value.id === iconWorkspaceId); if (item) item.icon = icon })
           setIconWorkspaceId(null)
-        }}>{icon}</button>)}</div>
+        }}><WorkspaceIcon value={icon} /></button>)}</div>
       </div>}
 
       {picker && <div className="dsh-mt_pwPicker">

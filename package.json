@@ -1,7 +1,7 @@
 {
   "name": "dsh-mytable",
   "description": "工作台：DeepSeek Harness 标准插件包形式的 agent 级项目容器（侧边栏应用抽屉 + 分栏工作区 + 控制室 + DSH 设置里的开关清单）。状态存 localStorage dsh.mytable.* 与 IndexedDB dsh-mytable。",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "engines": {
     "node": ">=22"
   },
@@ -47,7 +47,9 @@
     "test:changes": "node tests/changes.test.mjs",
     "test:encoding": "node tests/encoding.test.mjs",
     "test:prompt-workspaces": "node --test tests/prompt-workspaces-model.test.mjs",
-    "test": "npm run test:gate && npm run test:anchor && npm run test:server && npm run test:browser && npm run test:reference && npm run test:highlight && npm run test:preview && npm run test:changes && npm run test:encoding && npm run test:prompt-workspaces",
+    "test:desktop": "node --test tests/desktop-compat.test.mjs",
+    "test:icons": "node --test tests/workspace-icons.test.mjs",
+    "test": "npm run test:gate && npm run test:anchor && npm run test:server && npm run test:browser && npm run test:reference && npm run test:highlight && npm run test:preview && npm run test:changes && npm run test:encoding && npm run test:prompt-workspaces && npm run test:desktop && npm run test:icons",
     "pack": "npm pack"
   },
   "peerDependencies": {

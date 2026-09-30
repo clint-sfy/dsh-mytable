@@ -14,7 +14,9 @@ import { referenceInChat, appendComposerTextDom } from './reference-in-chat'
 import { AudioView, NoPreview, TableView, VideoView } from './preview-kinds'
 import { copyText } from './clipboard'
 import { IconGo } from './browser-icons'
+import { WorkspaceIcon } from './icon-renderer'
 import { Terminal } from 'xterm'
+import { resolveWebSocketOrigin } from './desktop-compat'
 
 import MarkdownIt from 'markdown-it'
 import { highlightCode, highlightFence, lineNumbersOf } from './code-highlight'
@@ -735,7 +737,7 @@ function boxPayload(x0: number, y0: number, x1: number, y1: number): { primary: 
 }
 
 /** 更新方法：复制给 AI 的升级指令（本包不自更新；升级 = 重新 build + pack + remove→add 重装 + 重启 profile） */
-const UPGRADE_CMD = 'cd C:/MyProject/deepseek/work_table/dsh-mytable; npm run build; npm pack; dsh plugin --profile mytable remove dsh-mytable; dsh plugin --profile mytable add "file:C:/MyProject/deepseek/work_table/dsh-mytable/dsh-mytable-0.1.0.tgz"'
+const UPGRADE_CMD = 'cd C:/MyProject/deepseek/work_table/dsh-mytable; npm run build; npm pack; dsh plugin --profile mytable remove dsh-mytable; dsh plugin --profile mytable add "file:C:/MyProject/deepseek/work_table/dsh-mytable/dsh-mytable-0.1.1.tgz"'
 const UPGRADE_AI = '帮我升级 dsh-mytable（工作台）：在终端执行 ' + UPGRADE_CMD + '，完成后提醒我重启 dsh --profile mytable 并刷新页面'
 
 async function copyTextSafe(text: string): Promise<boolean> {
@@ -2429,7 +2431,7 @@ function ConsolePane() {
             }}
           >
             <div className="dsh-mt_consoleCardHead">
-              <span className="dsh-mt_consoleIcon" aria-hidden>{c.icon}</span>
+              <span className="dsh-mt_consoleIcon" aria-hidden><WorkspaceIcon value={c.icon} /></span>
               <span className="dsh-mt_consoleName">{c.name}</span>
             </div>
             <div className="dsh-mt_consoleDivider" aria-hidden />
@@ -2695,6 +2697,22 @@ function TerminalPane() {
     let term: any = null
     let ws: WebSocket | null = null
     let disposed = false
+    let unsubTheme = () => {}
+    let pointerdownRegistered = false
+    let ro: ResizeObserver | null = null
+    const focusTerm = () => { try { term?.focus() } catch {} }
+    const cleanup = () => {
+      if (disposed) return
+      disposed = true
+      try { unsubTheme() } catch {}
+      if (pointerdownRegistered) {
+        try { el.removeEventListener('pointerdown', focusTerm) } catch {}
+        pointerdownRegistered = false
+      }
+      try { ro?.disconnect() } catch {}
+      try { ws?.close() } catch {}
+      try { term?.dispose() } catch {}
+    }
     try {
       term = new Terminal({
         cursorBlink: true,
@@ -2704,17 +2722,18 @@ function TerminalPane() {
         theme: xtermThemeOf(),
       })
     } catch {
+      cleanup()
       setFailed(T('pane.termFail'))
       return
     }
     term.open(el)
     // 跟随宿主主题：深/浅切换时原地换 theme（不重建终端、不丢会话）
-    const unsubTheme = subscribeTermScheme(() => { try { term.options.theme = xtermThemeOf() } catch {} })
+    unsubTheme = subscribeTermScheme(() => { try { term.options.theme = xtermThemeOf() } catch {} })
     // 强制自动换行（DECAWM on）：超长行在窗口宽度处换行，不被截断
     try { term.write('\x1b[?7h') } catch {}
-    const focusTerm = () => { try { term.focus() } catch {} }
     focusTerm()
     el.addEventListener('pointerdown', focusTerm)
+    pointerdownRegistered = true
     // 通过 xterm 的专用按键入口接管 Tab；外层 DOM 监听会与 xterm 的 textarea
     // 处理顺序冲突，可能只阻止焦点切换，却没有把补全键可靠地交给 shell。
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
@@ -2727,21 +2746,31 @@ function TerminalPane() {
       return false
     })
     const scope = splitEnv?.getScope?.()
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const url = proto + '//' + location.host + '/api/worktable/term?sessionId=' + encodeURIComponent(scope?.sessionId ?? '') + '&cwd=' + encodeURIComponent(scope?.cwd ?? '') + '&cols=80&rows=24'
+    const transportOrigin = (window as any).__DSH_TRANSPORT__?.webOrigin
+    const wsOrigin = resolveWebSocketOrigin(transportOrigin, location.origin)
+    if (wsOrigin === null) {
+      cleanup()
+      setFailed(T('pane.termFail'))
+      return
+    }
+    const url = wsOrigin + '/api/worktable/term?sessionId=' + encodeURIComponent(scope?.sessionId ?? '') + '&cwd=' + encodeURIComponent(scope?.cwd ?? '') + '&cols=80&rows=24'
     try {
       ws = new WebSocket(url)
     } catch {
-      term.dispose()
+      cleanup()
       setFailed(T('pane.termFail'))
       return
     }
     ws.onopen = () => { focusTerm(); try { term.write('\x1b[?7h') } catch {} }
     ws.onmessage = (ev) => { try { term.write(String(ev.data)) } catch {} }
     ws.onclose = () => { if (!disposed) { try { term.write('\r\n[连接已关闭]') } catch {} } }
-    ws.onerror = () => { if (!disposed) setFailed(T('pane.termFail')) }
+    ws.onerror = () => {
+      if (disposed) return
+      cleanup()
+      setFailed(T('pane.termFail'))
+    }
     term.onData((d: string) => { if (ws && ws.readyState === 1) ws.send(d) })
-    const ro = new ResizeObserver(() => {
+    ro = new ResizeObserver(() => {
       // 隐藏中的终端（标签切走、常驻挂载）尺寸为 0：不 fit，避免把 pty 尺寸压成极小值
       if (el.clientWidth < 40 || el.clientHeight < 40) return
       if (typeof term.fit === 'function') {
@@ -2750,14 +2779,7 @@ function TerminalPane() {
       }
     })
     ro.observe(el)
-    return () => {
-      disposed = true
-      try { unsubTheme() } catch {}
-      el.removeEventListener('pointerdown', focusTerm)
-      ro.disconnect()
-      try { ws?.close() } catch {}
-      try { term.dispose() } catch {}
-    }
+    return cleanup
   }, [])
   if (failed) {
     return <div className="dsh-mt_paneWip"><span className="dsh-mt_paneWipText">{failed}</span></div>

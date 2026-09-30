@@ -1,6 +1,22 @@
 /** 控制室更新公告正文。呈现时按纯文本保留换行，不做 Markdown 渲染。 */
-export const CHANGELOG_VERSION = 'v0.1.0'
-export const CHANGELOG_CURRENT = `更新公告 · v0.1.0
+export const CHANGELOG_VERSION = 'v0.1.1'
+export const CHANGELOG_CURRENT = `更新公告 · v0.1.1
+
+🖥️ 官方 Desktop
+
+- 支持在官方 Desktop 应用内的「插件」页面安装和管理工作台
+- 左下角紧凑入口可直接打开工作台
+- Desktop 端的终端传输使用 WebSocket，适配桌面应用的 dsh-app://app origin
+
+🎨 稳定图标
+
+- 工作区图标改用稳定 builtin ID 和彩色 inline SVG，不依赖系统 emoji 字体
+- 旧 emoji 存档会自动迁移，未知的自定义图标文本继续保留
+
+📦 自包含安装包
+
+- 仓库自带 vendor/dsh-flowglass-0.5.0.tgz，单独 clone 即可构建
+- 发布安装包内置 Flowglass 依赖，不需要额外 clone 或安装上游仓库
 
 🧱 项目创建与绑定
 
