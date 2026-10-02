@@ -36,7 +36,9 @@ await build({
   define: { __WT_VERSION__: JSON.stringify(pkg.version) },
   format: 'esm',
   target: ['node22'],
-  external: ['@deepseek-ai/*', 'node:*', 'ws', 'node-pty'],
+  // Cordis 由宿主注入；流镜使用的 typert protocol 必须随顶层 Host 一起打包，
+  // 否则本地 tgz 安装仍会暗中依赖 profile 里是否恰好存在该包。
+  external: ['@deepseek-ai/cordis', 'node:*', 'ws', 'node-pty'],
   loader: { '.css': 'text', '.html': 'text' }, // 原生皮肤模板以文本嵌入服务端 bundle
 })
 

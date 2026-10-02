@@ -13,13 +13,13 @@ export type PromptWorkspaceState = {
 
 const uid = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
 
-export function newPromptTemplate(name = 'PRD 编程'): PromptTemplate {
+export function newPromptTemplate(name = 'TODO'): PromptTemplate {
   return { id: uid(), name, constraints: [], fixedTexts: [] }
 }
 
 export function newPromptWorkspace(name = '代码编程工作区'): PromptWorkspace {
   const first = newPromptTemplate()
-  return { id: uid(), name, icon: DEFAULT_PROMPT_WORKSPACE_ICON, templates: [first, newPromptTemplate('Todo 撰写'), newPromptTemplate('测试撰写')] }
+  return { id: uid(), name, icon: DEFAULT_PROMPT_WORKSPACE_ICON, templates: [first] }
 }
 
 export function defaultPromptWorkspaceState(): PromptWorkspaceState {
@@ -68,6 +68,11 @@ export function normalizePromptWorkspaceState(input: unknown): PromptWorkspaceSt
     const item = value as Record<string, unknown>
     if (!Array.isArray(item.templates)) throw new Error(`第 ${wi + 1} 个工作区缺少模板`)
     const templates: PromptTemplate[] = item.templates.map(normalizeTemplate)
+    if (str(item.name).trim() === '代码编程工作区') {
+      const todo = templates.find((template) => template.name === 'TODO' || template.name === 'Todo 撰写')
+      const custom = templates.filter((template) => template !== todo && template.name !== 'PRD 编程' && template.name !== '测试撰写')
+      templates.splice(0, templates.length, todo ? { ...todo, name: 'TODO' } : newPromptTemplate(), ...custom)
+    }
     if (templates.length === 0) templates.push(newPromptTemplate())
     return {
       id: str(item.id) || uid(),

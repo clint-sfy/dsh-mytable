@@ -1975,7 +1975,7 @@ function ConsoleVideo(props: { src: string; style?: CSSProperties }) {
 
 /** 控制室面板：项目卡片网格（每行 3 张、超出换行）；数据由工作台组装推送（纯读镜像）。
  *  主题：dark/light 直接生效；system = 跟随宿主 html 的 color-scheme（DSH 深色/白色/跟随系统都会反映到它） */
-function ConsolePane() {
+export function ConsolePane() {
   const [, setTick] = useState(0)
   const [now, setNow] = useState(() => Date.now())
   const [cols, setColsState] = useState<number>(() => splitEnv?.console?.getCols?.() ?? 3)
@@ -2687,7 +2687,7 @@ function xtermThemeOf(): any {
   return { background, foreground, cursor, cursorAccent: background, selectionBackground: selection, ...ansi }
 }
 
-/** 终端窗（WS /api/worktable/term + node-pty；Windows 上服务端起 powershell.exe，加载用户个人配置以便带上 conda 等环境） */
+/** 终端窗（WS /api/worktable/term + node-pty；Windows 上服务端默认起 PowerShell） */
 function TerminalPane() {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [failed, setFailed] = useState('')
@@ -2717,7 +2717,7 @@ function TerminalPane() {
       term = new Terminal({
         cursorBlink: true,
         fontFamily: 'Cascadia Code, Cascadia Mono, Consolas, Menlo, monospace',
-        fontSize: 12,
+        fontSize: 13,
         convertEol: true,
         theme: xtermThemeOf(),
       })
@@ -2746,7 +2746,7 @@ function TerminalPane() {
       return false
     })
     const scope = splitEnv?.getScope?.()
-    const transportOrigin = (window as any).__DSH_TRANSPORT__?.webOrigin
+    const transportOrigin = (window as any).__DSH_TRANSPORT__?.streamBaseUrl ?? (window as any).__DSH_TRANSPORT__?.webOrigin
     const wsOrigin = resolveWebSocketOrigin(transportOrigin, location.origin)
     if (wsOrigin === null) {
       cleanup()

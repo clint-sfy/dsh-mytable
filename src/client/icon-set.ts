@@ -1,12 +1,16 @@
+import { FLUENT_EMOJI_ICONS } from './fluent-emoji-icons.generated.ts'
+
 /** 工作区、布局与快捷方式共用的图标库。存储值使用稳定 builtin:* ID，不依赖 emoji 字体。 */
 export type WorkspaceIconId = `builtin:${string}`
 export type WorkspaceIconGlyph =
-  | 'brick' | 'laptop' | 'monitor' | 'keyboard' | 'developer' | 'robot'
+  | 'brick' | 'laptop' | 'monitor' | 'worktable' | 'keyboard' | 'developer' | 'robot'
   | 'tools' | 'settings' | 'wrench' | 'package' | 'folders' | 'folder'
   | 'note' | 'books' | 'pencil' | 'ruler' | 'flask' | 'microscope'
   | 'chart' | 'compass' | 'rocket' | 'globe' | 'lock' | 'sparkles'
   | 'chat' | 'palette' | 'game' | 'home' | 'school' | 'car' | 'plane'
   | 'world' | 'hospital' | 'target' | 'bulb' | 'link'
+  | 'atom' | 'dna' | 'brain' | 'scientist' | 'labcoat' | 'telescope'
+  | 'satellite' | 'antenna' | 'abacus' | 'disk' | 'mouse' | 'search'
 
 export type WorkspaceIconDefinition = {
   id: WorkspaceIconId
@@ -17,6 +21,7 @@ export type WorkspaceIconDefinition = {
 }
 
 export const WORKSPACE_ICON_DEFINITIONS = [
+  { id: 'builtin:worktable', legacy: '', label: '工作台', color: '#4f7cff', glyph: 'worktable' },
   { id: 'builtin:brick', legacy: '🧱', label: '砖块', color: '#f59e0b', glyph: 'brick' },
   { id: 'builtin:laptop', legacy: '💻', label: '电脑', color: '#38bdf8', glyph: 'laptop' },
   { id: 'builtin:monitor', legacy: '🖥️', label: '显示器', color: '#60a5fa', glyph: 'monitor' },
@@ -54,6 +59,18 @@ export const WORKSPACE_ICON_DEFINITIONS = [
   { id: 'builtin:target', legacy: '🎯', label: '目标', color: '#f43f5e', glyph: 'target' },
   { id: 'builtin:bulb', legacy: '💡', label: '灵感', color: '#facc15', glyph: 'bulb' },
   { id: 'builtin:link', legacy: '🔗', label: '链接', color: '#22d3ee', glyph: 'link' },
+  { id: 'builtin:atom', legacy: '⚛️', label: '原子', color: '#60a5fa', glyph: 'atom' },
+  { id: 'builtin:dna', legacy: '🧬', label: 'DNA', color: '#c084fc', glyph: 'dna' },
+  { id: 'builtin:brain', legacy: '🧠', label: '大脑', color: '#fb7185', glyph: 'brain' },
+  { id: 'builtin:scientist', legacy: '🧑‍🔬', label: '科研人员', color: '#34d399', glyph: 'scientist' },
+  { id: 'builtin:lab-coat', legacy: '🥼', label: '实验服', color: '#e2e8f0', glyph: 'labcoat' },
+  { id: 'builtin:telescope', legacy: '🔭', label: '望远镜', color: '#818cf8', glyph: 'telescope' },
+  { id: 'builtin:satellite', legacy: '🛰️', label: '卫星', color: '#94a3b8', glyph: 'satellite' },
+  { id: 'builtin:antenna', legacy: '📡', label: '天线', color: '#38bdf8', glyph: 'antenna' },
+  { id: 'builtin:abacus', legacy: '🧮', label: '计算', color: '#f97316', glyph: 'abacus' },
+  { id: 'builtin:disk', legacy: '💽', label: '数据存储', color: '#a78bfa', glyph: 'disk' },
+  { id: 'builtin:mouse', legacy: '🖱️', label: '鼠标', color: '#94a3b8', glyph: 'mouse' },
+  { id: 'builtin:search', legacy: '🔍', label: '搜索', color: '#60a5fa', glyph: 'search' },
 ] as const satisfies readonly WorkspaceIconDefinition[]
 
 /** 选择器使用稳定 ID；数组顺序保持原 emoji 选择集顺序，末尾补充快捷方式链接图标。 */
@@ -89,6 +106,7 @@ export function workspaceIconDefinitionOf(value: unknown): WorkspaceIconDefiniti
 }
 
 const ICON_GLYPHS: Record<WorkspaceIconGlyph, string> = {
+  worktable: '<rect x="5" y="5" width="9" height="9" rx="2.3" fill="#fff" opacity=".98"/><rect x="10" y="10" width="9" height="9" rx="2.3" fill="#2dd4bf"/><path d="M8 8h3M13 13h3" stroke="#4f7cff" stroke-width="1.4" stroke-linecap="round"/>',
   brick: '<path d="M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z" fill="#fff" opacity=".94"/>',
   laptop: '<rect x="4" y="4" width="16" height="11" rx="1.5" fill="#fff"/><path d="M3 18h18l-2 2H5z" fill="#fff" opacity=".9"/>',
   monitor: '<rect x="3.5" y="4" width="17" height="12" rx="1.5" fill="#fff"/><path d="M10 16h4v3h3v1H7v-1h3z" fill="#fff" opacity=".9"/>',
@@ -136,7 +154,8 @@ export function workspaceIconSvgMarkup(value: unknown, fallback: WorkspaceIconId
   const normalized = normalizeWorkspaceIcon(value, fallback)
   const definition = WORKSPACE_ICON_BY_ID.get(normalized)
   if (!definition) return `<span data-workspace-icon-fallback="true">${escapeHtml(normalized)}</span>`
-  return `<svg data-workspace-icon="${definition.id}" width="1em" height="1em" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><rect x="1" y="1" width="22" height="22" rx="6" fill="${definition.color}"/>${ICON_GLYPHS[definition.glyph]}</svg>`
+  const icon = FLUENT_EMOJI_ICONS[definition.glyph]
+  return `<svg data-workspace-icon="${definition.id}" data-workspace-icon-style="fluent-emoji-flat" width="1em" height="1em" viewBox="0 0 ${icon.width} ${icon.height}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">${icon.body}</svg>`
 }
 
 type WorkspaceIconElement = {

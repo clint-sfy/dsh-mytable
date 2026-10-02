@@ -39,9 +39,9 @@ export function IconRefresh({ size = 14 }: IconProps) {
 export function IconGo({ size = 14 }: IconProps) {
   return (
     <svg {...base(size)}>
-      <path d="M6.2 9.8 12 4" />
-      <path d="M7.4 4H12v4.6" />
-      <path d="M12 12H4V4" />
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M5 8h6" />
+      <path d="m8.5 5.5 2.5 2.5-2.5 2.5" />
     </svg>
   )
 }

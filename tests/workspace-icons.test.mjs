@@ -9,6 +9,19 @@ test('工作区图标选择集使用稳定 builtin ID', () => {
   assert.ok(iconSet.WORKSPACE_ICONS.every((icon) => /^builtin:[a-z0-9-]+$/.test(icon)))
 })
 
+test('图标选择集包含编程与科研主题的 Fluent 彩色图标', () => {
+  const expected = [
+    'builtin:atom', 'builtin:dna', 'builtin:brain', 'builtin:scientist',
+    'builtin:lab-coat', 'builtin:telescope', 'builtin:satellite',
+    'builtin:antenna', 'builtin:abacus', 'builtin:disk',
+    'builtin:mouse', 'builtin:search',
+  ]
+  for (const id of expected) {
+    assert.ok(iconSet.WORKSPACE_ICONS.includes(id), `${id} should be selectable`)
+    assert.match(iconSet.workspaceIconSvgMarkup(id), /data-workspace-icon-style="fluent-emoji-flat"/)
+  }
+})
+
 test('文案工作区导入会把旧 emoji 映射为 builtin ID 并保留未知文本', () => {
   const state = normalizePromptWorkspaceState({
     version: 1,
@@ -35,6 +48,15 @@ test('内置图标输出固定颜色 inline SVG，未知字符串输出安全文
   assert.match(fallback, /data-workspace-icon-fallback/)
   assert.match(fallback, /&lt;品牌&gt;/)
   assert.doesNotMatch(fallback, /<品牌>/)
+})
+
+test('工作台入口图标使用跨平台稳定的 Fluent 彩色 SVG', () => {
+  const svg = iconSet.workspaceIconSvgMarkup('builtin:worktable')
+  assert.match(svg, /data-workspace-icon="builtin:worktable"/)
+  assert.match(svg, /data-workspace-icon-style="fluent-emoji-flat"/)
+  assert.ok(new Set(svg.match(/#[0-9a-f]{6}/ig)).size >= 3, 'worktable icon should retain Fluent emoji color depth')
+  assert.doesNotMatch(svg, /<rect x="1" y="1" width="22" height="22" rx="6"/)
+  assert.doesNotMatch(svg, />[^<]*(monitor|emoji)[^<]*</i)
 })
 
 test('DOM 桥使用 inline SVG 覆盖图标并能恢复宿主原始 DOM', () => {

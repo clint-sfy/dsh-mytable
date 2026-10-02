@@ -54,6 +54,18 @@ function kindOf(name: string): FileOpKind | undefined {
   return undefined
 }
 
+/** Desktop Harness 的组合编辑器用 command 区分新建与修改。 */
+function desktopEditorKind(args: Record<string, unknown>): FileOpKind | undefined {
+  if (args.command === 'create' && typeof args.file_text === 'string') return 'write'
+  if (args.command === 'str_replace'
+    && typeof args.old_str === 'string'
+    && typeof args.new_str === 'string') return 'edit'
+  if (args.command === 'insert'
+    && Number.isInteger(args.insert_line)
+    && typeof args.new_str === 'string') return 'edit'
+  return undefined
+}
+
 /** 防御式解析工具调用参数（模型产出的线上数据，逐字段校验） */
 function parseArgs(argsRaw: string): Record<string, unknown> {
   try {
@@ -118,9 +130,10 @@ export function extractFileOps(events: readonly any[]): FileOp[] {
     if (event?.type === 'tool/call') {
       const data = event.data as { name?: unknown; callId?: unknown; arguments?: unknown }
       if (typeof data?.name !== 'string' || typeof data?.callId !== 'string') continue
-      const kind = kindOf(data.name)
-      if (kind === undefined) continue
       const args = parseArgs(typeof data.arguments === 'string' ? data.arguments : '')
+      const desktopEditor = data.name === 'str_replace_editor'
+      const kind = desktopEditor ? desktopEditorKind(args) : kindOf(data.name)
+      if (kind === undefined) continue
       const path = pathOf(args)
       if (path === undefined) continue
       const base: FileOp = {
@@ -130,15 +143,15 @@ export function extractFileOps(events: readonly any[]): FileOp[] {
         running: true, isError: false,
       }
       if (kind === 'edit') {
-        const oldString = args.old_string
-        const newString = args.new_string
+        const oldString = desktopEditor ? (args.command === 'insert' ? '' : args.old_str) : args.old_string
+        const newString = desktopEditor ? args.new_str : args.new_string
         byCall.set(data.callId, typeof oldString === 'string' && typeof newString === 'string'
           ? { ...base, edit: { oldString, newString } }
           : base)
         continue
       }
       if (kind === 'write') {
-        const content = args.content
+        const content = desktopEditor ? args.file_text : args.content
         byCall.set(data.callId, typeof content === 'string' && content.length > 0 ? { ...base, content } : base)
         continue
       }

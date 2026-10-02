@@ -194,7 +194,7 @@ export function WorktableSettingsSection(props: any) {
 
       <section className="dsh-mt_setGroup">
         <div className="dsh-mt_setGroupHead">
-          <span className="dsh-mt_setGroupTitle">{t('settings.panesTitle')}<span className="dsh-mt_setCount">{PANE_PREF_KEYS.length + registry.panes.length}</span></span>
+          <span className="dsh-mt_setGroupTitle">{t('settings.panesTitle')}</span>
           <span className="dsh-mt_setGroupHint">{t('settings.panesHint')}</span>
         </div>
         <div className="dsh-mt_setGrid">
@@ -227,7 +227,7 @@ export function WorktableSettingsSection(props: any) {
 
       <section className="dsh-mt_setGroup">
         <div className="dsh-mt_setGroupHead">
-          <span className="dsh-mt_setGroupTitle">{t('settings.previewsTitle')}<span className="dsh-mt_setCount">{PREVIEW_FAMILIES.length + registry.viewers.length}</span></span>
+          <span className="dsh-mt_setGroupTitle">{t('settings.previewsTitle')}</span>
           <span className="dsh-mt_setGroupHint">{t('settings.previewsHint')}</span>
         </div>
         <div className="dsh-mt_setGrid">

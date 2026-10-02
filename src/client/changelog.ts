@@ -15,8 +15,13 @@ export const CHANGELOG_CURRENT = `更新公告 · v0.1.1
 
 📦 自包含安装包
 
-- 仓库自带 vendor/dsh-flowglass-0.5.0.tgz，单独 clone 即可构建
+- 仓库自带 vendor/dsh-flowglass-0.7.4.tgz，单独 clone 即可构建
 - 发布安装包内置 Flowglass 依赖，不需要额外 clone 或安装上游仓库
+
+🖥️ DSH 0.2.0-rc.2 兼容性
+
+- Flowglass peer 依赖覆盖 DSH 0.2.0-rc.2
+- Windows 上插件内建终端默认使用 PowerShell，支持 clear/cls 与 Tab 补全
 
 🧱 项目创建与绑定
 

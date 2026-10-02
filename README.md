@@ -9,7 +9,7 @@
 
 ## 主要功能
 
-- 工作台侧边栏：集中管理项目、图标、顺序、隐藏状态和会话绑定。
+- 官方面板中的工作台入口：集中管理项目、图标、顺序、隐藏状态和会话绑定。
 - 可调整分栏：支持横向、纵向窗口布局，以及拖动分隔线改变大小。
 - 控制室：在一个页面查看不同项目和会话的运行状态。
 - 资源管理器：浏览、搜索、预览和引用本地文件。
@@ -17,7 +17,7 @@
 - 文件改动：查看 AI 本轮修改过的文件和 Git 工作区改动，并点击预览。
 - 文案工作区：保存限制文件、固定话语和多个可拖动排序的模板。
 - 内置终端和浏览器窗口。
-- 内置 `dsh-flowglass`，无需再单独打开它的侧边栏。
+- 内置 `dsh-flowglass`，可直接在工作台中查看会话流程。
 
 ## 环境要求
 
@@ -43,27 +43,24 @@ npm install --global pnpm
 
 ### Desktop（首选）
 
-在官方 Desktop 的左下角紧凑入口打开「插件」页面，直接输入以下任一已确认支持的来源：
-
-- GitHub Release URL：`https://github.com/clint-sfy/dsh-mytable/releases/download/v0.1.1/dsh-mytable-0.1.1.tgz`
-- 本地下载的 `dsh-mytable-0.1.1.tgz` 文件
+在官方 Desktop 的插件页面中选择本地的 `dsh-mytable-0.1.1.tgz` 文件。
 
 应用内插件管理使用 Desktop 自带的 pnpm，不需要在系统中另行安装 pnpm。安装或更新后按 Desktop 的提示重新加载/重启应用。
 
-命令行仅作为高级备用方式：必须先**完全退出 Desktop**，再执行：
+命令行仅作为高级备用方式，执行：
 
 ```bash
-dsh plugin --profile desktop add "https://github.com/clint-sfy/dsh-mytable/releases/download/v0.1.1/dsh-mytable-0.1.1.tgz"
+dsh plugin --profile desktop add "路径/到/dsh-mytable-0.1.1.tgz"
 ```
 
 本地包也可以替换为 `"路径/到/dsh-mytable-0.1.1.tgz"`。完成后再启动 Desktop。
 
 ### Web
 
-发布 `v0.1.1` Release 并上传安装包后，安装命令为：
+使用本地 `dsh-mytable-0.1.1.tgz` 安装：
 
 ```bash
-npx --yes @deepseek-ai/dsh plugin --profile web add "https://github.com/clint-sfy/dsh-mytable/releases/download/v0.1.1/dsh-mytable-0.1.1.tgz"
+npx --yes @deepseek-ai/dsh plugin --profile web add "路径/到/dsh-mytable-0.1.1.tgz"
 npx --yes @deepseek-ai/dsh web
 ```
 
@@ -77,12 +74,11 @@ http://127.0.0.1:3080
 
 ## 下载到本地后安装
 
-### 方法一：下载 Release 安装包
+### 方法一：使用本地安装包
 
-1. 打开仓库的 [Releases](https://github.com/clint-sfy/dsh-mytable/releases)。
-2. 下载 `dsh-mytable-0.1.1.tgz`。
-3. 在下载目录打开终端。
-4. 执行安装和启动命令。
+1. 准备 `dsh-mytable-0.1.1.tgz`。
+2. 在安装包所在目录打开终端。
+3. 执行安装和启动命令。
 
 PowerShell 示例：
 
@@ -112,7 +108,7 @@ npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.1.tgz
 npx --yes @deepseek-ai/dsh web
 ```
 
-仓库已经自带 `vendor/dsh-flowglass-0.5.0.tgz`，单独 clone 这个仓库即可，不需要额外下载或克隆 `dsh-flowglass`。`npm pack` 生成的 `dsh-mytable-0.1.1.tgz` 也会内置运行所需的 Flowglass 依赖。
+仓库已经自带 `vendor/dsh-flowglass-0.7.4.tgz`，单独 clone 这个仓库即可，不需要额外下载或克隆 `dsh-flowglass`。`npm pack` 生成的 `dsh-mytable-0.1.1.tgz` 也会内置运行所需的 Flowglass 依赖。
 
 ## 第一次部署 DSH
 
@@ -209,7 +205,7 @@ npx --yes @deepseek-ai/dsh --profile web --dump-config
 npx --yes @deepseek-ai/dsh plugin --profile web list
 ```
 
-启动 DSH 后，侧边栏应出现工作台入口。
+启动 DSH 后，在官方面板列表中选择“工作台”。
 
 ## 更新
 
@@ -221,7 +217,7 @@ npx --yes @deepseek-ai/dsh plugin --profile web add "路径/到/新版-dsh-mytab
 npx --yes @deepseek-ai/dsh web
 ```
 
-建议使用带版本号的安装包和 Release URL。不要长期复用一个内容会变化但地址不变的下载链接，否则 pnpm 可能因缓存完整性检查拒绝更新。
+建议使用带版本号的安装包；更新时替换为新的本地文件路径。
 
 ## 卸载
 
@@ -231,7 +227,7 @@ npx --yes @deepseek-ai/dsh plugin --profile web remove dsh-mytable
 
 卸载后重新启动 DSH。
 
-插件的界面状态主要保存在浏览器的 localStorage 和 IndexedDB 中。卸载插件不会自动删除这些数据；如果需要彻底清理，请在浏览器站点数据设置中删除 `127.0.0.1:3080` 的本地数据。
+卸载插件不会自动删除界面状态；如需彻底清理，请使用 DSH 或浏览器提供的数据清理入口。
 
 ## 本地开发与打包
 
@@ -268,16 +264,14 @@ npm test        # 运行测试
 npm pack        # 生成可安装的 tgz
 ```
 
-## 发布建议
+## 生成本地安装包
 
-建议每个公开版本都采用不可变的 Git 标签和 Release：
+准备本地安装包时：
 
 1. 更新 `package.json`、`dsh.plugin.json` 中的版本号。
 2. 执行 `npm run build`。
 3. 执行 `npm pack`。
-4. 创建同版本 Git 标签，例如 `v0.1.1`。
-5. 创建 GitHub Release，并上传 `dsh-mytable-0.1.1.tgz`。
-6. 在 README 中把推荐安装命令固定到该版本。
+4. 检查生成的 `dsh-mytable-0.1.1.tgz` 内容。
 
 仓库可以添加 `dsh-plugin` topic，方便 DSH 用户发现插件。
 
@@ -290,7 +284,7 @@ npm pack        # 生成可安装的 tgz
 
 ## 兼容性
 
-本插件面向 DeepSeek Harness Web profile。由于 DSH 仍在快速迭代，建议发布版本时在 Release 说明中记录经过验证的 DSH 版本。
+本插件面向 DeepSeek Harness Web profile。由于 DSH 仍在快速迭代，准备新版本时建议记录经过验证的 DSH 版本。
 
 如果升级 DSH 后工作台没有出现，请依次检查：
 

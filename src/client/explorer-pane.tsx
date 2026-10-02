@@ -285,7 +285,7 @@ export function ExplorerPane(props: { row: PaneRow; index: number }) {
         role="button"
         tabIndex={-1}
         className={cls}
-        style={{ paddingLeft: depth * 22 + 6 }}
+        style={{ paddingLeft: depth * 14 + 10 }}
         data-ex-path={entry.path}
         data-ex-dir={entry.isDir ? '1' : '0'}
         title={entry.path}
@@ -384,7 +384,7 @@ export function ExplorerPane(props: { row: PaneRow; index: number }) {
             role="button"
             tabIndex={-1}
             className={'dsh-mt_exRow dsh-mt_exDir dsh-mt_exRootRow' + (selected === root ? ' dsh-mt_exOn' : '')}
-            style={{ paddingLeft: 6 }}
+            style={{ paddingLeft: 10 }}
             data-ex-path={root}
             data-ex-root-row="1"
             title={root}

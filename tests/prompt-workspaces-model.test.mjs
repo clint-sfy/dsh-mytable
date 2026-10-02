@@ -1,6 +1,34 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildWorkspacePrompt, normalizePromptWorkspaceState } from '../src/client/prompt-workspaces-model.ts'
+import { buildWorkspacePrompt, defaultPromptWorkspaceState, normalizePromptWorkspaceState } from '../src/client/prompt-workspaces-model.ts'
+
+test('代码编程工作区默认只提供 TODO 模板', () => {
+  const state = defaultPromptWorkspaceState()
+  assert.deepEqual(state.workspaces[0].templates.map((item) => item.name), ['TODO'])
+  assert.equal(state.selectedTemplateId, state.workspaces[0].templates[0].id)
+})
+
+test('旧默认模板迁移时只清理 PRD 和测试并保留用户模板', () => {
+  const state = normalizePromptWorkspaceState({
+    version: 1,
+    selectedWorkspaceId: 'code',
+    selectedTemplateId: 'prd',
+    workspaces: [{
+      id: 'code',
+      name: '代码编程工作区',
+      icon: 'builtin:laptop',
+      templates: [
+        { id: 'prd', name: 'PRD 编程', constraints: [], fixedTexts: [] },
+        { id: 'todo', name: 'Todo 撰写', constraints: [], fixedTexts: ['保留内容'] },
+        { id: 'test', name: '测试撰写', constraints: [], fixedTexts: [] },
+        { id: 'mine', name: '我的模板', constraints: [], fixedTexts: [] },
+      ],
+    }],
+  })
+  assert.deepEqual(state.workspaces[0].templates.map((item) => item.name), ['TODO', '我的模板'])
+  assert.deepEqual(state.workspaces[0].templates[0].fixedTexts, ['保留内容'])
+  assert.equal(state.selectedTemplateId, 'todo')
+})
 
 test('文案严格按限制文件、固定要求、当前需求排列', () => {
   const prompt = buildWorkspacePrompt({

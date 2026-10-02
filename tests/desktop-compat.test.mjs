@@ -8,6 +8,7 @@ const compat = await import('../src/client/desktop-compat.ts').catch((error) => 
 })
 const isDesktopApp = compat?.isDesktopApp
 const resolveWebSocketOrigin = compat?.resolveWebSocketOrigin
+const splitSource = readFileSync(new URL('../src/client/split.tsx', import.meta.url), 'utf8')
 
 test('detects the Desktop dsh-app://app location', () => {
   assert.equal(typeof isDesktopApp, 'function', 'desktop compatibility module is missing')
@@ -29,6 +30,14 @@ test('converts an http or https transport webOrigin to ws or wss', () => {
   )
 })
 
+test('desktop streamBaseUrl supplies the terminal WebSocket host even with an API path', () => {
+  assert.equal(
+    resolveWebSocketOrigin('http://127.0.0.1:19387/api/stream/', 'dsh-app://app'),
+    'ws://127.0.0.1:19387',
+  )
+  assert.match(splitSource, /__DSH_TRANSPORT__\?\.streamBaseUrl\s*\?\?\s*\(window as any\)\.__DSH_TRANSPORT__\?\.webOrigin/)
+})
+
 test('falls back to location.origin when webOrigin is invalid or missing', () => {
   assert.equal(typeof resolveWebSocketOrigin, 'function', 'desktop compatibility module is missing')
   assert.equal(
@@ -37,7 +46,7 @@ test('falls back to location.origin when webOrigin is invalid or missing', () =>
   )
   assert.equal(
     resolveWebSocketOrigin('https://web.example.test/path', 'http://web.example.test:3000'),
-    'ws://web.example.test:3000',
+    'wss://web.example.test',
   )
   assert.equal(
     resolveWebSocketOrigin(undefined, 'http://web.example.test:3000'),
@@ -77,4 +86,12 @@ test('TerminalPane cleans up before reporting a WebSocket error', () => {
   assert.ok(cleanupCall >= 0, 'WebSocket errors must invoke cleanup')
   assert.ok(failedCall >= 0, 'WebSocket errors must report the terminal failure')
   assert.ok(cleanupCall < failedCall, 'WebSocket errors must clean up before reporting failure')
+})
+
+test('plugin terminal uses interactive PowerShell as the Windows default shell', () => {
+  const source = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
+  const setupTerminal = source.slice(source.indexOf('function setupTerminal('), source.indexOf('/**', source.indexOf('function setupTerminal(') + 1))
+  assert.match(setupTerminal, /process\.platform === 'win32'[\s\S]*\? \{ cmd: 'powershell\.exe', args: \['-NoLogo'\] \}/)
+  assert.doesNotMatch(setupTerminal, /cmd: 'cmd\.exe'/)
+  assert.match(setupTerminal, /: \{ cmd: process\.env\.SHELL \|\| '\/bin\/bash', args: \[\] \}/)
 })

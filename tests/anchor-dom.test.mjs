@@ -165,7 +165,7 @@ function buildSandbox() {
     })
   }
   const requireStub = (id) => {
-    if (id === 'react' || id === 'react/jsx-runtime') return makeStub()
+    if (id === 'react' || id === 'react-dom' || id === 'react/jsx-runtime' || id === '@deepseek-ai/dsh-client-ui-primitives') return makeStub()
     throw new Error('unexpected external require: ' + id)
   }
   const runSandbox = { __factory: sandbox.__captured.factory, __requireStub: requireStub }

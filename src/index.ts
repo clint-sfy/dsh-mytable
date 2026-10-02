@@ -7,6 +7,7 @@ import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { extractFrameAncestors, type BrowserProbeResult } from './browser-policy'
+import { apply as applyFlowglassHost } from 'dsh-flowglass'
 
 /**
  * 基础数据目录解析：不加载任何官方包（loadPkg 的兜底只能用它，禁止反向调用包加载函数——否则成环）。
@@ -709,9 +710,8 @@ function setupTerminal(webServer: any, ctx: any) {
   const wss = new WebSocketServer({ noServer: true })
   const spawnShell = (): { cmd: string; args: string[] } =>
     process.platform === 'win32'
-      // 不带 -NoProfile / -NoLogo：加载用户个人配置（conda init 的 (base) 环境、别名、函数都在这里），
-      // 与 DSH-better-sidebar 的默认起法一致（其 shellArgs 默认为空）。代价是首屏有 PowerShell 横幅、启动略慢。
-      ? { cmd: 'powershell.exe', args: [] }
+      // PowerShell 同时支持 clear/cls，并提供命令与路径 Tab 补全。
+      ? { cmd: 'powershell.exe', args: ['-NoLogo'] }
       : { cmd: process.env.SHELL || '/bin/bash', args: [] }
   const clampDim = (v: number, fallback: number) => Math.min(1024, Math.max(2, Number.isFinite(v) ? v : fallback))
 
@@ -751,14 +751,28 @@ function setupTerminal(webServer: any, ctx: any) {
   }), 'dsh-mytable: terminal upgrade')
 }
 
-export function apply(ctx: Context) {
+/** HTTP 路由必须随插件 fiber 销毁；否则 Desktop 同 Host 重载会遗留旧注册。 */
+function registerRoute(ctx: any, webServer: any, route: any) {
+  return ctx.effect(() => webServer.register(route), `dsh-mytable: ${route.kind} ${route.path}`)
+}
+
+export async function apply(ctx: Context) {
+  // 工作台核心路由不能被流镜的可选依赖阻塞。依赖齐全时在子作用域启动流镜 Host；
+  // 缺失时终端、文件、Git 等工作台能力仍照常工作。
+  if (typeof (ctx as any).inject === 'function') {
+    ;(ctx as any).inject(['fs', 'sessionQuery', 'timer'], (flowCtx: any) => {
+      void Promise.resolve(applyFlowglassHost(flowCtx)).catch((error: unknown) => {
+        flowCtx.logger?.warn?.('[dsh-mytable] 流镜 Host 启动失败：' + String(error))
+      })
+    })
+  }
   const webServer = (ctx as any).webServer
   if (!webServer) {
     ctx.logger?.warn('[dsh-mytable] ctx.webServer 不可用（headless profile？），跳过服务端路由')
     return
   }
 
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: HEALTH_PATH,
     handler: (_req: any, res: any) => {
@@ -769,7 +783,7 @@ export function apply(ctx: Context) {
   // 浏览器窗的目标站点探测：宿主代取响应头，客户端据此判断该站点能不能被 iframe 嵌入
   // （X-Frame-Options / CSP frame-ancestors 正是浏览器拒绝加载 iframe 时用的信号）。
   // 只回传响应头、只放行 http(s)、8 秒硬超时；跨站请求（sec-fetch-site: cross-site）直接拒。
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: BROWSER_PROBE_PATH,
     handler: async (req: any, res: any) => {
@@ -825,7 +839,7 @@ export function apply(ctx: Context) {
   })
 
   // 本地文件读取（资源管理器点击 .html 后浏览器标签内打开）
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/file',
     handler: async (req: any, res: any) => {
@@ -855,7 +869,7 @@ export function apply(ctx: Context) {
   // 本地站点（目录级静态托管）：点开 index.html 时挂载整个所在目录，
   // 让 ./assets/... 等相对引用正常解析（前缀路由，余下路径 = <rootToken>/<相对路径>）。
   // 原生皮肤模板：HTML 骨架 + 设计系统样式表（随插件分发，主题自动适配）
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'prefix',
     path: TEMPLATE_PREFIX,
     handler: (req: any, res: any) => {
@@ -876,7 +890,7 @@ export function apply(ctx: Context) {
     },
   })
 
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'prefix',
     path: SITE_PREFIX,
     handler: async (req: any, res: any) => {
@@ -908,7 +922,7 @@ export function apply(ctx: Context) {
     },
   })
 
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/fs',
     handler: async (req: any, res: any) => {
@@ -926,7 +940,7 @@ export function apply(ctx: Context) {
 
   // 文件名搜索（资源管理器搜索框）：按名字/相对路径子串匹配，限定在有界遍历里
   // （跳过大目录、限制深度与扫描/命中上限），大仓库也不会把服务卡住。
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/search',
     handler: async (req: any, res: any) => {
@@ -945,7 +959,7 @@ export function apply(ctx: Context) {
   })
 
   // 文件变动（diff）：工作区改动清单 + 每个文件的 unified diff；也支持单文件查询
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/diff',
     handler: async (req: any, res: any) => {
@@ -968,7 +982,7 @@ export function apply(ctx: Context) {
   })
 
   // 仓库发现（文件变动窗的仓库选择器）：不在仓库里就向下找子目录里的仓库
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/repos',
     handler: async (req: any, res: any) => {
@@ -987,7 +1001,7 @@ export function apply(ctx: Context) {
 
   // 会话镜头的数据源：本会话事件日志里的文件操作（tool/call + tool/result）。
   // 只把「折叠文件操作需要的字段」发过去，并把超长文本截断——事件日志里的工具结果可能很大。
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/ops',
     handler: async (req: any, res: any) => {
@@ -1114,7 +1128,7 @@ export function apply(ctx: Context) {
    * 而不是每个卡片各发一次历史请求。来源是各子会话自己的事件日志（只读快照）。
    * `ctx.get('subagents').listDescendants` 不可用时如实回空表（界面退化成只有状态）。
    */
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/subagent-live',
     handler: async (req: any, res: any) => {
@@ -1154,7 +1168,7 @@ export function apply(ctx: Context) {
    *   - `job-kill` 直接用 registry 的 `kill`，用「本会话的活 Agent」当 caller 做围栏
    *     （只能停本会话的任务）；registry / agent 不在时如实降级，不假装成功。
    */
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/job-output',
     handler: async (req: any, res: any) => {
@@ -1214,7 +1228,7 @@ export function apply(ctx: Context) {
     },
   })
 
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/job-kill',
     handler: async (req: any, res: any) => {
@@ -1260,7 +1274,7 @@ export function apply(ctx: Context) {
     }
   }
 
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/git-stage',
     handler: (req: any, res: any) => gitAction(req, res, async (root, body) => {
@@ -1269,7 +1283,7 @@ export function apply(ctx: Context) {
     }),
   })
 
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/git-unstage',
     handler: (req: any, res: any) => gitAction(req, res, async (root, body) => {
@@ -1281,7 +1295,7 @@ export function apply(ctx: Context) {
     }),
   })
 
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/git-discard',
     handler: (req: any, res: any) => gitAction(req, res, async (root, body) => {
@@ -1301,7 +1315,7 @@ export function apply(ctx: Context) {
     }),
   })
 
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/git-commit',
     handler: (req: any, res: any) => gitAction(req, res, async (root, body) => {
@@ -1312,7 +1326,7 @@ export function apply(ctx: Context) {
   })
 
   // 分支清单（Git 镜头头部那个分支下拉的数据源）：只回本地分支，当前分支排最前
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/git-branches',
     handler: async (req: any, res: any) => {
@@ -1333,7 +1347,7 @@ export function apply(ctx: Context) {
   // 切分支（对齐 DSH-better-sidebar 的 checkout）：只允许切到**本地已有**分支，
   // 名字先挡一次「- 开头 / 带空白」（免得被 git 当参数解析），失败把 git 的原文带回界面
   // （工作区有冲突改动时 git 自己会拒绝，这里不额外加戏）。
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/git-checkout',
     handler: (req: any, res: any) => gitAction(req, res, async (root, body) => {
@@ -1346,7 +1360,7 @@ export function apply(ctx: Context) {
     }),
   })
 
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/git-log',
     handler: async (req: any, res: any) => {
@@ -1369,7 +1383,7 @@ export function apply(ctx: Context) {
   // `-m --first-parent` 是参考实现的做法：合并提交默认**没有任何 patch**，
   // 点历史里的 merge 提交就会看到空白；加上它以后 merge 显示对第一父提交的差异，
   // 对普通提交则是无副作用的（照样回它自己的 patch）。
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/git-show',
     handler: (req: any, res: any) => gitAction(req, res, async (root, body) => {
@@ -1382,7 +1396,7 @@ export function apply(ctx: Context) {
 
   // 取某个版本的文件全文（diff 里「未改动区间」展开时用：工作区那份用工作区文件，
   // 已暂存那份要读索引里的 blob，否则会跟后续未暂存的编辑对不上）
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/git-blob',
     handler: (req: any, res: any) => gitAction(req, res, async (root, body) => {
@@ -1399,7 +1413,7 @@ export function apply(ctx: Context) {
   // 优先走宿主正式服务 ctx.workspaceRegistry（0.1.1/0.1.2 均有，正确感知 DSH_HOME 与存储后端）；
   // 不可用时回退按 resolveDshHomeSafe() 读 storages/workspace.json（只读）。
   // 返回结构是客户端契约，两种来源都映射成同一 shape。
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/workspaces',
     handler: async (_req: any, res: any) => {
@@ -1443,7 +1457,7 @@ export function apply(ctx: Context) {
   })
 
   // 本地文件写入（MD 编辑模式保存回磁盘）
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/write',
     handler: async (req: any, res: any) => {
@@ -1467,7 +1481,7 @@ export function apply(ctx: Context) {
   })
 
   // 新建分组：创建目录（仅当父目录已存在，避免递归误建深层垃圾目录）
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/mkdir',
     handler: async (req: any, res: any) => {
@@ -1488,7 +1502,7 @@ export function apply(ctx: Context) {
     },
   })
 
-  webServer.register({
+  registerRoute(ctx, webServer, {
     kind: 'exact',
     path: '/api/worktable/git',
     handler: async (req: any, res: any) => {

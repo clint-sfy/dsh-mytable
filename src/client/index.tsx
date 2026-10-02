@@ -1,8 +1,13 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import * as ReactRuntime from 'react'
+import * as ReactDOMRuntime from 'react-dom'
+import * as UiPrimitivesRuntime from '@deepseek-ai/dsh-client-ui-primitives'
 import { css } from './styles'
 import { NS, zh, en, type WorktableKey } from './locales'
 import { isAbs, joinPath, parentPathOf, basenameOf } from './pathutil'
 import { splitStore, SplitWorkspace, setSplitT, setSplitEnv, type LayoutSpec, type SplitPane, type ConsoleCardData } from './split'
+import { bindableSessionGroups, captureCurrentSessionId, sessionTitleOf } from './add-project-model'
+import { resolveProjectScope } from './project-scope'
 import { referenceInChat, currentScope, setReferenceServices } from './reference-in-chat'
 import { extractFileOps } from './session-ops'
 import { previewEnabled, pluginPaneEnabled, pluginViewerEnabled } from './worktable-prefs'
@@ -24,11 +29,11 @@ import {
   WORKSPACE_ICONS,
 } from './icon-set'
 import { WorkspaceIcon } from './icon-renderer'
-import { isDesktopApp } from './desktop-compat'
+import { createBundledFlowglassClient } from './flowglass-bundled.generated.js'
 
 /**
- * dsh-mytable 客户端（v2）：侧边栏底部「工作台」区块。
- * 结构：分隔线 → [≡ 手柄][工作台][搜索/视图选项/添加+] → 项目卡片区（子座位）。
+ * dsh-mytable 客户端（v2）：官方面板中的「工作台」入口。
+ * 结构：项目与会话管理 → 分栏工作区 → 控制室。
  * v2 新增（PRD §10 定案）：
  *   - 卡片规范 v2 渐进上报协议：owner props 下发 order/hidden/nameOverrides，
  *     卡片可选上报 reportMeta/reportUsed；v1 卡片零改动兼容（按注册序排在最前）。
@@ -755,30 +760,6 @@ async function fetchSessionGroups(): Promise<{ groups: { title: string; sessions
   } catch { return { groups: [], current: '' } }
 }
 
-/** hover 气泡：挂在 document.body 的独立元素（不受侧栏堆叠上下文限制，可向右伸出显示） */
-let bindTipEl: HTMLDivElement | null = null
-function showBindTip(btn: HTMLElement) {
-  const tip = btn.getAttribute('data-tip')
-  if (!tip) return
-  if (!bindTipEl) {
-    bindTipEl = document.createElement('div')
-    bindTipEl.className = 'dsh-mt_bindTip'
-    document.body.appendChild(bindTipEl)
-  }
-  bindTipEl.textContent = tip
-  const r = btn.getBoundingClientRect()
-  bindTipEl.style.left = (r.right + 8) + 'px'
-  bindTipEl.style.top = (r.top + r.height / 2) + 'px'
-  bindTipEl.style.display = 'block'
-  // 右侧放不下时翻到左侧（一般不会：侧栏 ~288px + 气泡 ~200px 远小于视口宽）
-  const tw = bindTipEl.offsetWidth
-  const x = r.right + 8 + tw > window.innerWidth - 8 ? Math.max(8, r.left - 8 - tw) : r.right + 8
-  bindTipEl.style.left = x + 'px'
-}
-function hideBindTip() {
-  if (bindTipEl) bindTipEl.style.display = 'none'
-}
-
 /** 把文本送入指定会话：宿主同款寻址（binding(id).session.prompt / sendSession(会话面)），
  *  插件是根级上下文，无作用域的 conversation.send 会报 requires a session scope，不可用。 */
 async function promptIntoSession(sessionId: string, text: string): Promise<void> {
@@ -819,7 +800,7 @@ export type NewSessionGroup = { kind: 'none' } | { kind: 'existing'; workspaceId
 /** 插件知识包：附在窗口任务提示词里，让接收方跳过对插件源码的重新侦察，直接干活 */
 const KNOWLEDGE_PACK = [
   '【插件知识包·请直接采用，不要重新侦察插件源码】',
-  '- dsh-mytable 是 DeepSeek Harness 的标准插件包（工作台：侧边栏里的项目应用抽屉；不了解的细节可直接向用户提问）。',
+  '- dsh-mytable 是 DeepSeek Harness 的工作台插件（工作台：官方面板中的项目与分栏工作区；不了解的细节可直接向用户提问）。',
   '- 窗口（内容窗）模型：每个窗 = 一个标签页；未指派时显示选择器（浏览器/动画/资源管理器/终端/✨自定义）；',
   '  窗内容还可放 iframe 网页与文件预览（.md/.txt/.tsx/.css/.html 等）。',
   '- 窗口可装载的形式：HTML 单文件（交互 UI，放项目文件夹后在资源管理器点击渲染）、网页 URL、',
@@ -844,7 +825,7 @@ function buildWindowTaskText(projectId: string, projectName: string, windowLabel
   const lines = [
     '【工作台自定义窗口任务】',
     '以下内容由 dsh-mytable（工作台）插件' + (mode === 'new' ? '自动发送' : '发送') + '：用户想把「' + projectName + '」项目中的「' + win + '」窗口打造成他想要的内容。',
-    '1. dsh-mytable 是侧边栏底部的自建「工作台」插件（官方文档没有它的说明，不了解之处可直接向用户提问）。',
+    '1. dsh-mytable 是官方面板中的「工作台」插件（不了解之处可直接向用户提问）。',
     '2. 用户需求：' + requirement,
     '3. ' + folderLine,
     '4. 产出形式请按任务类型选择（不要一律用 HTML）：',
@@ -1121,7 +1102,7 @@ function RenameInput(props: { initial: string; placeholder: string; onCommit: (v
 
 function WorktableSection(props: any) {
   const wide = props.wide !== false
-  const desktop = isDesktopApp()
+  const footerAction = props.footerAction === true
   const renderProjectSlot = typeof props.renderSlot === 'function' ? props.renderSlot : null
   /** locale 座席 t；宿主未安装 locale 服务时回退 zh 词典（保持独立可用）。 */
   const t = (key: WorktableKey, params?: Record<string, string>): string => {
@@ -1252,8 +1233,6 @@ function WorktableSection(props: any) {
   const dragRef = useRef<{ startY: number; startX: number; startRect: DOMRect; dragging: boolean; prevFloat: FloatRect | null } | null>(null)
   const dragIdRef = useRef<string | null>(null)
   const [railRect, setRailRect] = useState<{ left: number; width: number } | null>(null)
-  const [bottomInset, setBottomInset] = useState(0)
-  const bottomInsetRef = useRef(0)
   const [floatGeo, setFloatGeo] = useState<{ left: number; width: number | null } | null>(null)
   const [sidebarRight, setSidebarRight] = useState<number | null>(null)
   const [activeSplitId, setActiveSplitId] = useState<string | null>(() =>
@@ -1356,7 +1335,7 @@ function WorktableSection(props: any) {
       }
     }
     const cards: ConsoleCardData[] = []
-    cards.push(make(CONSOLE_ID, t('console.name'), CONSOLE_ICON, true))
+    cards.push(make(CONSOLE_ID, t('console.name'), pr.projects.iconOverrides[CONSOLE_ID] ?? CONSOLE_ICON, true))
     const ids = [...pr.aliveRegisteredIds, ...pr.projects.layouts.map((l) => l.id)]
     const known = new Set(ids)
     const stored = pr.projects.order.filter((id) => known.has(id))
@@ -1375,18 +1354,19 @@ function WorktableSection(props: any) {
 
   /** 打开「添加项目」面板（侧栏 ＋ 与控制室创建卡共用）：默认父目录 = 当前会话工作目录 */
   const openAddPanel = (presentation: 'sidebar' | 'console' = 'console') => {
+    let desktopCurrent = ''
+    try { desktopCurrent = localStorage.getItem('dsh.sessions.current') ?? '' } catch {}
+    const capturedSessionId = captureCurrentSessionId(sessionBridge?.list?.getSnapshot?.(), desktopCurrent)
     setAddPresentation(presentation)
     setAddOpen(true)
     setViewOptionsOpen(false)
+    setWsSessionId(capturedSessionId)
+    setWsSessionError(!capturedSessionId)
     const cwd = sessionScopeStore.snapshot?.cwd ?? ''
     if (!wsFolderParent && cwd) setWsFolderParent(cwd)
-    setWsSessionError(false)
+    setWsFolderError(false)
     fetchSessionGroups().then((res) => {
-      setWsSessionGroups(res.groups)
-      if (!wsSessionId) {
-        const sessions = res.groups.flatMap((g) => g.sessions)
-        setWsSessionId(sessions.find((s) => s.isCurrent)?.id ?? sessions[0]?.id ?? '')
-      }
+      setWsSessionGroups(bindableSessionGroups(res.groups))
     }).catch(() => setWsSessionGroups([]))
   }
 
@@ -1397,7 +1377,13 @@ function WorktableSection(props: any) {
     const env = {
       getScope: () => {
         const s = sessionScopeStore.snapshot
-        return s ? { sessionId: s.sessionId, cwd: s.cwd } : null
+        const activeProjectId = splitStore.active && splitStore.spec ? splitStore.spec.id : null
+        return resolveProjectScope(
+          s ? { sessionId: s.sessionId, cwd: s.cwd } : null,
+          activeProjectId,
+          projectsRef.current.projects.folders,
+          projectsRef.current.projects.bindings,
+        )
       },
       getJobs: () => sessionScopeStore.snapshot?.jobs ?? [],
       getSubagents: () => sessionScopeStore.snapshot?.subagents ?? [],
@@ -1512,7 +1498,11 @@ function WorktableSection(props: any) {
           const pr = projectsRef.current.projects
           const layout = pr.layouts.find((l) => l.id === id)
           const view = pr.views[id]
-          if (view || layout) actionsRef.current?.openSplit((view ?? layout) as LayoutSpec)
+          if (view || layout) {
+            const spec = (view ?? layout) as LayoutSpec
+            actionsRef.current?.openSplit(spec)
+            reportUsed(id)
+          }
           else {
             // 入驻项目无视图覆盖：仅切换其绑定对话（对齐卡片自带打开行为）
             const bound = pr.bindings[id]
@@ -1533,7 +1523,6 @@ function WorktableSection(props: any) {
     try { (window as any).__dshCustomEnv = env } catch {}
     return () => { setSplitEnv(null); setReferenceServices(null); try { (window as any).__dshCustomEnv = null } catch {} }
   }, [])
-  const floatRef = useRef<FloatRect | null>(null)
 
   const persistView = (patch: Partial<ViewState>) => {
     setView((prev) => {
@@ -1729,7 +1718,7 @@ function buildCustomLayoutPrompt(req: string): string {
     '【为 dsh-mytable（工作台 mytable 发行版）插件增加一个新的布局预设】',
     '',
     '背景：dsh-mytable 是 DeepSeek Harness 的自建容器插件（本机仓库 dsh-mytable；不了解的细节可直接向用户提问）。',
-    '侧边栏「工作台」区块管理项目，每个项目打开后是一个平铺工作区（若干内容窗 + 右侧对话窗）。',
+    '工作台管理项目，每个项目打开后是一个平铺工作区（若干内容窗 + 右侧对话窗）。',
     '布局预设定义在 src/client/index.tsx 的 PRESET_DEFS 数组，选择器缩略图在 presetThumb() 函数。',
     '',
     '任务：按下方「用户需求」新增一个布局预设。',
@@ -1753,17 +1742,21 @@ function buildCustomLayoutPrompt(req: string): string {
   /** 分栏工作区入口（M1 引擎）：项目卡片调用 openSplit(spec) 打开声明式布局；
    * 若该 id 存在视图覆盖（用户在设置里变更过视图），用覆盖布局替换打开。
    * 若项目绑定了会话，打开后右侧对话窗自动切换过去。 */
-  const openSplit = useCallback((spec: LayoutSpec) => {
+  const openSplit = useCallback(async (spec: LayoutSpec) => {
     engineIdsRef.current.add(spec.id)
+    // Desktop 的 sessions.open 是异步切换。必须先让右侧宿主聊天切到项目绑定对话，
+    // 再移动宿主聊天区域并展开工作区；反过来会被展开过程中的 DOM 重锚定吃掉切换。
+    let prev: string | null = null
+    try { prev = sessionBridge?.list?.getSnapshot?.()?.current ?? null } catch {}
+    const bound = projectsRef.current.projects.bindings[spec.id]
+    projectAttachRef.sessionId = prev
+    projectAttachRef.attached = bound ?? prev
+    if (bound) {
+      markPluginSessionOpen(bound)
+      try { await sessionBridge?.sessions?.open?.(bound) } catch {}
+    }
     splitStore.open(projects.views[spec.id] ?? spec)
     if (splitStore.active && splitStore.spec?.id === spec.id) {
-      // 记录打开前会话（关项目时回切）与该项目「归属会话」（切到别的会话 = 自动关项目）
-      let prev: string | null = null
-      try { prev = sessionBridge?.list?.getSnapshot?.()?.current ?? null } catch {}
-      projectAttachRef.sessionId = prev
-      projectAttachRef.attached = projectsRef.current.projects.bindings[spec.id] ?? prev
-      const bound = projectsRef.current.projects.bindings[spec.id]
-      if (bound) { try { sessionBridge?.sessions?.open?.(bound) } catch {} }
       ackProjectNotify(spec.id)
       // 补挂：此前项目未打开时暂存的产物（entries = 多窗口挂载列表），现在自动挂进各目标窗格；
       // 全部落位成功记录指纹（供自愈扫挂去重）
@@ -1809,16 +1802,9 @@ function buildCustomLayoutPrompt(req: string): string {
     }
   }, [projects.views, t])
 
-  /** 控制室卡片点击：已绑定 → 打开控制室；未绑定 → 强制绑定弹窗 */
-  const clickConsoleCard = (anchor: HTMLElement) => {
-    if (projectsRef.current.projects.bindings[CONSOLE_ID]) { openConsole(); return }
-    const r = anchor.getBoundingClientRect()
-    setConsoleBind({
-      x: clamp(Math.round(r.right + 8), 8, window.innerWidth - 640),
-      y: clamp(Math.round(r.top), 8, window.innerHeight - 460),
-    })
-    setConsoleGroups([])
-    fetchSessionGroups().then((res) => setConsoleGroups(res.groups)).catch(() => setConsoleGroups([]))
+  /** 控制室是工作台首页，不依赖项目对话绑定。 */
+  const clickConsoleCard = (_anchor: HTMLElement) => {
+    openConsole()
   }
 
   /** 强制绑定：加入现有对话（绑定后直接打开控制室） */
@@ -1873,11 +1859,11 @@ function buildCustomLayoutPrompt(req: string): string {
     invalidatePickState() // 切换目标：失效在途选择请求、清空旧错误与手工输入
     const r = anchor.getBoundingClientRect()
     const x = clamp(Math.round(r.right + 8), 8, window.innerWidth - 300)
-    const y = clamp(Math.round(r.top), 8, window.innerHeight - 420)
+    const y = clamp(Math.round(r.top + r.height / 2), 116, window.innerHeight - 116)
     setBindPick({ id, x, y })
     setBindListOpen(false)
     setBindGroups([])
-    fetchSessionGroups().then((res) => setBindGroups(res.groups)).catch(() => setBindGroups([]))
+    fetchSessionGroups().then((res) => setBindGroups(bindableSessionGroups(res.groups))).catch(() => setBindGroups([]))
   }, [])
 
   /** 弹出系统文件夹选择窗（宿主 pickDirectory）；选中后回调。
@@ -2448,10 +2434,10 @@ function buildCustomLayoutPrompt(req: string): string {
             bindBtn = document.createElement('span')
             bindBtn.className = 'dsh-mt_bindBtn'
             bindBtn.setAttribute('role', 'button')
-            const circles = document.createElement('span')
-            circles.className = 'dsh-mt_bindCircles'
-            circles.setAttribute('aria-hidden', 'true')
-            bindBtn.appendChild(circles)
+            const state = document.createElement('span')
+            state.className = 'dsh-mt_bindState'
+            state.setAttribute('aria-hidden', 'true')
+            bindBtn.appendChild(state)
             el.appendChild(bindBtn)
             const cs = getComputedStyle(el)
             if (cs.position === 'static') el.style.position = 'relative'
@@ -2467,6 +2453,7 @@ function buildCustomLayoutPrompt(req: string): string {
             ? t('bind.tipBound', { name: boundSessionTitle(bound) }) + (bindNotifyMap[id] === 'busy' ? t('bind.tipBusy') : bindNotifyMap[id] === 'done' ? t('bind.tipDone') : bindNotifyMap[id] === 'need' ? t('bind.tipNeed') : '')
             : t('bind.tipUnbound')
           bindBtn.setAttribute('data-tip', tip)
+          bindBtn.setAttribute('title', tip)
           bindBtn.setAttribute('aria-label', tip)
           const icon = el.children[0] as HTMLElement | null
           if (icon) {
@@ -2562,55 +2549,6 @@ function buildCustomLayoutPrompt(req: string): string {
       }
     : undefined
 
-  useEffect(() => { bottomInsetRef.current = bottomInset }, [bottomInset])
-  useEffect(() => { floatRef.current = float }, [float])
-
-  // ── 底部悬浮面板避让 ──
-  // 停靠态下检测「侧边栏列内、贴近底部、且与区块自然位置重叠」的 fixed 面板
-  // （如 dsh-usage 的余额 dock），把区块整体抬到面板上方，双方互不遮挡、都可调整位置。
-  const measureBottomOverlay = useCallback(() => {
-    if (isFloat) return
-    const root = rootRef.current
-    if (!root) return
-    const self = root.getBoundingClientRect()
-    if (self.width < 10) return
-    const naturalBottom = self.bottom + bottomInsetRef.current
-    const loX = self.left - 8
-    const hiX = self.right + 8
-    const regionTop = window.innerHeight - 300
-    let needed = 0
-    const nodes = document.querySelectorAll<HTMLElement>('body *')
-    for (const el of nodes) {
-      const r = el.getBoundingClientRect()
-      if (r.width < 40 || r.height < 16) continue
-      if (r.top < regionTop) continue
-      if (r.left > 80) continue
-      if (r.right < loX || r.left > hiX) continue
-      const cs = getComputedStyle(el)
-      if (cs.position !== 'fixed') continue
-      if (cs.visibility === 'hidden' || Number(cs.opacity) === 0) continue
-      if (r.top >= naturalBottom + 4) continue
-      const overlap = Math.min(r.bottom, naturalBottom + 400) - r.top
-      if (overlap > 8) {
-        needed = Math.max(needed, Math.min(naturalBottom - r.top + 8, 340))
-      }
-    }
-    setBottomInset((prev) => (Math.abs(prev - needed) < 2 ? prev : needed))
-  }, [isFloat])
-
-  // 停靠/折叠变化时立即重测；停靠期间每 2s 轮询（悬浮面板自身可移动）
-  useEffect(() => {
-    if (!isFloat) measureBottomOverlay()
-  }, [isFloat, wide, measureBottomOverlay])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (!floatRef.current) measureBottomOverlay()
-    }, 2000)
-    return () => window.clearInterval(timer)
-  }, [measureBottomOverlay])
-
-  const dockedStyle = !isFloat && bottomInset > 0 ? { marginBottom: bottomInset } : undefined
 
   // + 弹窗：向右弹出、锚定 sidebar 右边缘与工作台区块顶部（视口内钳制）
   const sectionTop = rootRef.current?.getBoundingClientRect().top ?? 100
@@ -2648,24 +2586,63 @@ function buildCustomLayoutPrompt(req: string): string {
     }
   }
 
-  if (desktop) {
-    return (
-      <div ref={rootRef} className="dsh-mt_section dsh-mt_desktopEntry">
-        <button
-          type="button"
-          className="dsh-mt_desktopBtn"
-          title="阿源的工作台"
-          aria-label="阿源的工作台"
-          onClick={() => openConsole()}
-        >阿源的工作台</button>
+  const addPanel = addOpen ? (
+    <>
+      <div className="dsh-mt_popBackdrop" onClick={() => { invalidatePickState(); setAddOpen(false) }} />
+      <div
+        className="dsh-mt_menu dsh-mt_add dsh-mt_pop dsh-mt_addConsole"
+        style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: 'min(560px,calc(100vw - 32px))', maxHeight: 'min(82vh,720px)', overflow: 'auto', zIndex: 80 }}
+      >
+        {/* 新项目一律使用固定布局：内容窗在左、聊天框在最右侧并保持可用。 */}
+        <span className="dsh-mt_menuLabel">{t('add.newProject')}</span>
+        <div className="dsh-mt_addForm">
+          <input type="text" placeholder={t('add.layoutNamePh')} value={wsName}
+            onChange={(e) => { setWsName(e.target.value); setWsError(false) }} />
+          <div className="dsh-mt_addFolderRow">
+            <span className="dsh-mt_customLabel">{t('add.session')}</span>
+            <select className="dsh-mt_sessionSelect" value={wsSessionId} data-current-session={wsSessionId || undefined}
+              onChange={(e) => { setWsSessionId(e.target.value); setWsSessionError(false) }}>
+              <option value="">{t('add.sessionCurrentUnavailable')}</option>
+              {wsSessionGroups.map((group) => <optgroup key={group.title} label={group.title}>
+                {group.sessions.map((session) => <option key={session.id} value={session.id}>{session.title}</option>)}
+              </optgroup>)}
+            </select>
+          </div>
+          <div className="dsh-mt_addFolderRow">
+            <span className="dsh-mt_customLabel">{t('add.folderParent')}</span>
+            <span className={'dsh-mt_addFolderPath' + (wsFolderParent ? '' : ' dsh-mt_addFolderPathNone')} title={wsFolderParent || ''}>
+              {wsFolderParent || t('add.folderNone')}
+            </span>
+            <button type="button" className="dsh-mt_bindFolderChange" disabled={pickBusy}
+              onClick={() => { pickFolder('add', (p) => { setWsFolderParent(p); setWsFolderError(false) }); setWsError(false) }}>
+              {pickBusy ? t('add.folderPicking') : t('add.folderPick')}
+            </button>
+            <button type="button" className="dsh-mt_bindFolderChange" title={t('add.folderManual')}
+              onClick={() => { setManualPathFor(manualPathFor === 'add' ? null : 'add'); setPickErr((prev) => ({ ...prev, add: '' })) }}>{t('add.folderManual')}</button>
+          </div>
+          {pickBusy && <p className="dsh-mt_folderPickHint">{t('add.folderPickerHint')}</p>}
+          {manualPathFor === 'add' && (
+            <div className="dsh-mt_addFolderRow">
+              <input type="text" className="dsh-mt_manualPathInput" placeholder={t('add.folderManualPh')} value={manualPathText}
+                onChange={(e) => setManualPathText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') applyManualPath('add') }} />
+              <button type="button" className="dsh-mt_bindFolderChange" onClick={() => applyManualPath('add')}>{t('add.folderManualOk')}</button>
+            </div>
+          )}
+          {pickErr.add && <p className="dsh-mt_addError">{pickErr.add}</p>}
+          <button type="button" className="dsh-mt_addBtn" disabled={!wsSessionId} onClick={saveLayout}>{t('add.layoutSave')}</button>
+        </div>
+        {wsError && <p className="dsh-mt_addError">{t('add.layoutInvalid')}</p>}
+        {wsSessionError && <p className="dsh-mt_addError">{wsSessionId ? t('add.sessionRequired') : t('add.sessionCurrentUnavailable')}</p>}
+        {wsFolderError && <p className="dsh-mt_addError">{t('add.folderRequired')}</p>}
       </div>
-    )
-  }
+    </>
+  ) : null
 
   if (!wide) {
     // 收起态 = 等行高的正方形圆角按钮，中间只留 emoji；点击 = 进入对应项目
     const railItems: { icon: string; name: string; onClick: (e: any) => void }[] = [
-      { icon: CONSOLE_ICON, name: t('console.name'), onClick: (e) => clickConsoleCard(e.currentTarget as HTMLElement) },
+      { icon: projects.iconOverrides[CONSOLE_ID] ?? CONSOLE_ICON, name: t('console.name'), onClick: (e) => clickConsoleCard(e.currentTarget as HTMLElement) },
       ...aliveRegisteredIds.map((id) => ({
         icon: projects.iconOverrides[id] ?? metas[id]?.icon ?? DEFAULT_PROJECT_ICON,
         name: projects.nameOverrides[id] ?? metas[id]?.name ?? id,
@@ -2685,7 +2662,7 @@ function buildCustomLayoutPrompt(req: string): string {
     // 浮动态：fixed 定位到拖前高度（左/宽取折叠列实测几何）；停靠态：文档流原位
     const railStyle = isFloat && railRect
       ? { position: 'fixed' as const, top: float.top, left: railRect.left, width: railRect.width, zIndex: 70 }
-      : bottomInset > 0 ? { marginBottom: bottomInset } : undefined
+      : undefined
     return (
       <div ref={rootRef} className="dsh-mt_section dsh-mt_rail" style={railStyle}>
         <div className="dsh-mt_divider" />
@@ -2703,7 +2680,7 @@ function buildCustomLayoutPrompt(req: string): string {
   }
 
   return (
-    <div ref={rootRef} className={'dsh-mt_section' + (isFloat ? ' dsh-mt_float' : '')} style={isFloat ? floatStyle : dockedStyle}>
+    <div ref={rootRef} className={'dsh-mt_section' + (isFloat ? ' dsh-mt_float' : '')} style={floatStyle}>
       <div className="dsh-mt_divider" />
       <div className="dsh-mt_header">
         <button
@@ -2783,71 +2760,12 @@ function buildCustomLayoutPrompt(req: string): string {
         </div>
       )}
 
-      {addOpen && <div className="dsh-mt_popBackdrop" onClick={() => { invalidatePickState(); setAddOpen(false) }} />}
-      {addOpen && (
-        <div
-          className={'dsh-mt_menu dsh-mt_add dsh-mt_pop' + (addPresentation === 'console' ? ' dsh-mt_addConsole' : '')}
-          style={addPresentation === 'console'
-            ? { position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: 'min(520px,calc(100vw - 32px))', zIndex: 80 }
-            : { position: 'fixed', left: popLeft, top: clamp(addAnchorTop ?? popTop, MIN_TOP, window.innerHeight - 120), width: 360, maxHeight: `calc(100vh - ${clamp(addAnchorTop ?? popTop, MIN_TOP, window.innerHeight - 120)}px - 12px)`, overflow: 'auto', zIndex: 80 }}
-        >
-          {/* 布局选择已下线：新项目一律用固定布局（内容窗在左、聊天框右侧满高），见 buildLayout */}
-          <span className="dsh-mt_menuLabel">{t('add.newProject')}</span>
-          <div className="dsh-mt_addForm">
-            <input type="text" placeholder={t('add.layoutNamePh')} value={wsName}
-              onChange={(e) => { setWsName(e.target.value); setWsError(false) }} />
-            <div className="dsh-mt_addFolderRow">
-              <span className="dsh-mt_customLabel">{t('add.session')}</span>
-              <select
-                className="dsh-mt_sessionSelect"
-                value={wsSessionId}
-                onChange={(e) => {
-                  setWsSessionId(e.target.value)
-                  setWsSessionError(false)
-                }}
-              >
-                <option value="">{wsSessionGroups.length > 0 ? t('add.sessionNone') : t('add.sessionEmpty')}</option>
-                {wsSessionGroups.map((g, gi) => (
-                  <optgroup key={g.title || 'g' + gi} label={g.title || t('add.sessionUngrouped')}>
-                    {g.sessions.map((s) => <option key={s.id} value={s.id}>{s.title}{s.isCurrent ? ' · ' + t('add.sessionCurrent') : ''}</option>)}
-                  </optgroup>
-                ))}
-              </select>
-            </div>
-            <div className="dsh-mt_addFolderRow">
-              <span className="dsh-mt_customLabel">{t('add.folderParent')}</span>
-              <span className={'dsh-mt_addFolderPath' + (wsFolderParent ? '' : ' dsh-mt_addFolderPathNone')} title={wsFolderParent || ''}>
-                {wsFolderParent || t('add.folderNone')}
-              </span>
-              <button type="button" className="dsh-mt_bindFolderChange" disabled={pickBusy}
-                onClick={() => { pickFolder('add', (p) => { setWsFolderParent(p); setWsFolderError(false) }); setWsError(false) }}>
-                {pickBusy ? t('add.folderPicking') : t('add.folderPick')}
-              </button>
-              <button type="button" className="dsh-mt_bindFolderChange" title={t('add.folderManual')}
-                onClick={() => { setManualPathFor(manualPathFor === 'add' ? null : 'add'); setPickErr((prev) => ({ ...prev, add: '' })) }}>{t('add.folderManual')}</button>
-            </div>
-            {pickBusy && <p className="dsh-mt_folderPickHint">{t('add.folderPickerHint')}</p>}
-            {manualPathFor === 'add' && (
-              <div className="dsh-mt_addFolderRow">
-                <input type="text" className="dsh-mt_manualPathInput" placeholder={t('add.folderManualPh')} value={manualPathText}
-                  onChange={(e) => setManualPathText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') applyManualPath('add') }} />
-                <button type="button" className="dsh-mt_bindFolderChange" onClick={() => applyManualPath('add')}>{t('add.folderManualOk')}</button>
-              </div>
-            )}
-            {pickErr.add && <p className="dsh-mt_addError">{pickErr.add}</p>}
-            <button type="button" className="dsh-mt_addBtn" onClick={saveLayout}>{t('add.layoutSave')}</button>
-          </div>
-          {wsError && <p className="dsh-mt_addError">{t('add.layoutInvalid')}</p>}
-          {wsSessionError && <p className="dsh-mt_addError">{t('add.sessionRequired')}</p>}
-          {wsFolderError && <p className="dsh-mt_addError">{t('add.folderRequired')}</p>}
-        </div>
-      )}
+      {addPanel}
 
       {iconPick && (
         <>
           <div className="dsh-mt_popBackdrop" onClick={() => setIconPick(null)} />
-          <div className="dsh-mt_iconPop" style={{ left: iconPick.x, top: iconPick.y }}>
+          <div className="dsh-mt_iconPop" style={{ left: iconPick.x, top: iconPick.y, maxHeight: `calc(100vh - ${iconPick.y + 8}px)` }}>
             <div className="dsh-mt_iconPopTitle">{t('icons.title')}</div>
             <div className="dsh-mt_iconGrid">
               {ICON_SET.map((icon) => {
@@ -2878,7 +2796,7 @@ function buildCustomLayoutPrompt(req: string): string {
 
       {viewOptionsOpen && <div className="dsh-mt_popBackdrop" onClick={() => setViewOptionsOpen(false)} />}
       {viewOptionsOpen && (
-        <div ref={settingsRef} className="dsh-mt_manage dsh-mt_pop dsh-mt_settings" style={{ position: 'fixed', left: popLeft, top: settingsTop ?? popTop, width: 280, zIndex: 80 }}>
+        <div ref={settingsRef} className="dsh-mt_manage dsh-mt_pop dsh-mt_settings" style={{ position: 'fixed', left: clamp(popLeft, 12, Math.max(12, window.innerWidth - 392)), top: settingsTop ?? popTop, width: 'min(380px,calc(100vw - 24px))', zIndex: 80 }}>
           <button
             type="button"
             className="dsh-mt_settingsClose"
@@ -2997,7 +2915,7 @@ function buildCustomLayoutPrompt(req: string): string {
 
       {bindPick && <div className="dsh-mt_popBackdrop" style={{ zIndex: 83 }} onClick={() => { invalidatePickState(); setBindPick(null); setBindListOpen(false) }} />}
       {bindPick && (
-        <div className="dsh-mt_menu dsh-mt_pop dsh-mt_bindPop" style={{ position: 'fixed', left: bindPick.x, top: bindPick.y, width: 280, zIndex: 84 }}>
+        <div className="dsh-mt_menu dsh-mt_pop dsh-mt_bindPop" style={{ position: 'fixed', left: bindPick.x, top: bindPick.y, transform: 'translateY(-50%)', width: 280, maxHeight: 'calc(100vh - 16px)', overflow: 'auto', zIndex: 84 }}>
           {/* 项目文件夹框（格式基准）：第一行 emoji+标题，第二行路径；可随时更改 */}
           <div className="dsh-mt_bindFolderBox">
             <div className="dsh-mt_bindFolderRow">
@@ -3186,7 +3104,7 @@ function buildCustomLayoutPrompt(req: string): string {
       )}
 
       <div className="dsh-mt_projects" data-managing={viewOptionsOpen ? 'true' : undefined}>
-        {/* 「工作台」控制室项目：固定首位、不可删除；未绑定点开 = 强制绑定弹窗 */}
+        {/* 「工作台」控制室项目：固定首位、不可删除、无需绑定对话。 */}
         <button
           type="button"
           className="dsh-mt_layout dsh-mt_consoleEntry"
@@ -3195,23 +3113,16 @@ function buildCustomLayoutPrompt(req: string): string {
           title={t('console.name')}
           onClick={(e) => clickConsoleCard(e.currentTarget as HTMLElement)}
         >
-          <span className="dsh-mt_layoutIcon"><WorkspaceIcon value={CONSOLE_ICON} /></span>
+          <span
+            className="dsh-mt_layoutIcon dsh-mt_iconPick"
+            role="button"
+            tabIndex={0}
+            title={t('icons.change')}
+            onClick={(e) => { e.stopPropagation(); openIconPick('project', CONSOLE_ID, e.currentTarget as HTMLElement) }}
+          ><WorkspaceIcon value={projects.iconOverrides[CONSOLE_ID] ?? CONSOLE_ICON} /></span>
           <span className="dsh-mt_layoutText">
             <span className="dsh-mt_layoutName">{t('console.name')}</span>
           </span>
-          <span
-            className={'dsh-mt_bindBtn'}
-            role="button"
-            tabIndex={0}
-            data-bound={bindNotifyMap[CONSOLE_ID] ?? (projects.bindings[CONSOLE_ID] ? 'true' : 'false')}
-            data-tip={projects.bindings[CONSOLE_ID]
-              ? t('bind.tipBound', { name: boundSessionTitle(projects.bindings[CONSOLE_ID]) })
-              : t('bind.tipUnbound')}
-            aria-label={projects.bindings[CONSOLE_ID]
-              ? t('bind.tipBound', { name: boundSessionTitle(projects.bindings[CONSOLE_ID]) })
-              : t('bind.tipUnbound')}
-            onClick={(e) => { e.stopPropagation(); openBindPick(CONSOLE_ID, e.currentTarget as HTMLElement) }}
-          ><span className="dsh-mt_bindCircles" aria-hidden /></span>
           <span className="dsh-mt_layoutArrow" aria-hidden>›</span>
         </button>
         {renderProjectSlot
@@ -3246,7 +3157,7 @@ function buildCustomLayoutPrompt(req: string): string {
                 : t('bind.tipUnbound')}
               aria-label={projects.bindings[l.id] ? t('bind.tipBound', { name: boundSessionTitle(projects.bindings[l.id]) }) : t('bind.tipUnbound')}
               onClick={(e) => { e.stopPropagation(); openBindPick(l.id, e.currentTarget as HTMLElement) }}
-            ><span className="dsh-mt_bindCircles" aria-hidden /></span>
+            ><span className="dsh-mt_bindState" aria-hidden /></span>
             <span className="dsh-mt_layoutArrow" aria-hidden>›</span>
           </button>
         ))}
@@ -3280,7 +3191,11 @@ function buildCustomLayoutPrompt(req: string): string {
   )
 }
 
-export const inject = ['slots', 'locale', 'sessions', 'conversation', 'workspaces']
+function WorktableFooterAction(props: any) {
+  return <WorktableSection {...props} footerAction />
+}
+
+export const inject = ['slots', 'remote', 'timer', 'locale', 'sessions', 'conversation', 'workspaces']
 
 export function apply(ctx: any) {
   // 一次性迁移（改名 dsh.worktable.* → dsh.mytable.*，含 IndexedDB 背景库）：
@@ -3302,31 +3217,6 @@ export function apply(ctx: any) {
     document.head.appendChild(style)
     return () => { style.remove() }
   }, 'dsh-mytable: styles')
-
-  // 绑定按钮 hover 气泡：事件委托 + body 级气泡（跨层显示，不遮挡右侧对话也不盖项目名）
-  ctx.effect(() => {
-    const over = (e: MouseEvent) => {
-      const t = e.target as HTMLElement | null
-      const btn = t && t.closest ? (t.closest('.dsh-mt_bindBtn') as HTMLElement | null) : null
-      if (btn) showBindTip(btn)
-    }
-    const out = (e: MouseEvent) => {
-      const t = e.target as HTMLElement | null
-      if (t && t.closest && t.closest('.dsh-mt_bindBtn')) hideBindTip()
-    }
-    const hide = () => hideBindTip()
-    document.addEventListener('mouseover', over, true)
-    document.addEventListener('mouseout', out, true)
-    document.addEventListener('scroll', hide, true)
-    document.addEventListener('click', hide, true)
-    return () => {
-      document.removeEventListener('mouseover', over, true)
-      document.removeEventListener('mouseout', out, true)
-      document.removeEventListener('scroll', hide, true)
-      document.removeEventListener('click', hide, true)
-      if (bindTipEl) { bindTipEl.remove(); bindTipEl = null }
-    }
-  }, 'dsh-mytable: bind tip')
 
   // locale 词典（宿主 locale 服务缺席时由 t 的回退分支兜底）
   ctx.effect(() => {
@@ -3385,24 +3275,27 @@ export function apply(ctx: any) {
     ctx.effect(() => () => { void fileRoutingSeat.dispose() }, 'dsh-mytable: route chat files into workspace')
   } catch {}
 
-  // 分栏工作区浮层（M1 通用引擎，shell.overlay 座位）
-  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-    name: 'shell.overlay',
-    id: 'dsh-mytable-split',
-    order: 100,
-  }, SplitWorkspace), 'dsh-mytable: split workspace overlay')
-
+  // 官方侧栏底部入口：只挂一个官方 action；项目/表单状态由该入口保活，
+  // 控制室与项目工作区仍通过下面的 shell.overlay/split 引擎展开。
   ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
     name: 'sidebar.footer.action',
-    id: 'dsh-mytable',
-    order: 20,
+    id: 'dsh-mytable-worktable',
+    order: 120,
+    label: '工作台',
     children: {
       'sidebar.worktable.project': {
         kind: 'list',
         scope: 'root',
       },
     },
-  }, WorktableSection), 'dsh-mytable: worktable section')
+  }, WorktableFooterAction), 'dsh-mytable: official footer action')
+
+  // 分栏工作区浮层（M1 通用引擎，shell.overlay 座位）
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'dsh-mytable-split',
+    order: 100,
+  }, SplitWorkspace), 'dsh-mytable: split workspace overlay')
 
   // DSH 设置 →「工作台」节（窗口类型 / 文件预览开关清单）。
   // 与 better-sidebar 的「侧边卡片」同一承载面：settings.section 是 list 槽，注册项自带
@@ -3428,8 +3321,20 @@ export function apply(ctx: any) {
     const service = createMyTableService(LOCAL_VERSION, (kind, id) =>
       kind === 'pane' ? pluginPaneEnabled(id) : pluginViewerEnabled(id))
     ctx.provide('mytable', service)
-    // 自测钩子（与 __dshWorktable 同类）：供真机验收脚本直接驱动注册表 / 收录表
+    // 先公开服务，再启动源码内嵌的流镜；流镜启动时即可同步注册窗口类型。
     try { (window as any).__dshMytable = service } catch {}
+    // Desktop 只把顶层插件客户端加入模块表，子路径客户端不会被自动执行。
+    // 因此在 mytable 服务就绪后，从顶层入口显式启动随包编译的 Flowglass 客户端。
+    const flowglassClient = createBundledFlowglassClient((id: string) => {
+      if (id === 'react') return ReactRuntime
+      if (id === 'react-dom') return ReactDOMRuntime
+      if (id === '@deepseek-ai/dsh-client-ui-primitives') return UiPrimitivesRuntime
+      throw new Error(`Unsupported bundled Flowglass client dependency: ${id}`)
+    })
+    void Promise.resolve(flowglassClient.apply(ctx)).catch((error: unknown) => {
+      console.error('[dsh-mytable] Flowglass client failed to start', error)
+    })
+    // 自测钩子（与 __dshWorktable 同类）：供真机验收脚本直接驱动注册表 / 收录表
     try { (window as any).__dshMytableCatalog = RECOMMENDED_PLUGINS } catch {}
     // 自测钩子：文件变动窗的会话操作折叠（真机验收拿它把 /ops 的事件折成操作清单）
     try { (window as any).__dshMytableOpsProbe = (events: any) => extractFileOps(Array.isArray(events) ? events : []) } catch {}

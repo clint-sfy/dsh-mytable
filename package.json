@@ -1,6 +1,6 @@
 {
   "name": "dsh-mytable",
-  "description": "工作台：DeepSeek Harness 标准插件包形式的 agent 级项目容器（侧边栏应用抽屉 + 分栏工作区 + 控制室 + DSH 设置里的开关清单）。状态存 localStorage dsh.mytable.* 与 IndexedDB dsh-mytable。",
+  "description": "工作台：在 DeepSeek Harness 中管理项目、会话与本地工作区的插件。",
   "version": "0.1.1",
   "engines": {
     "node": ">=22"
@@ -19,7 +19,8 @@
     "cordis.patch.yml",
     "dsh.plugin.json",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "dsh": {
     "bundle": {
@@ -30,26 +31,50 @@
       "inject": [
         "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-primitives",
-        "@deepseek-ai/dsh-client-locale"
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
       ]
     }
   },
   "scripts": {
-    "build": "node build.mjs",
+    "build": "node scripts/generate-fluent-emoji-icons.mjs && node scripts/prepare-flowglass-plugin.mjs && node build.mjs",
     "check": "node --check lib/index.js && node --check lib/client.js",
     "test:gate": "node client-factory-gate.test.mjs",
     "test:anchor": "node tests/anchor-dom.test.mjs",
     "test:server": "node tests/server-home.test.mjs",
+    "test:server-lifecycle": "node --test tests/server-route-lifecycle.test.mjs",
     "test:browser": "node tests/browser-policy.test.mjs",
     "test:reference": "node tests/reference-in-chat.test.mjs",
     "test:highlight": "node tests/code-highlight.test.mjs",
     "test:preview": "node tests/preview-families.test.mjs",
     "test:changes": "node tests/changes.test.mjs",
+    "test:bind-session-groups": "node --experimental-strip-types tests/bind-session-groups.test.mjs",
+    "test:browser-and-status-icons": "node --test tests/browser-and-status-icons.test.mjs",
     "test:encoding": "node tests/encoding.test.mjs",
     "test:prompt-workspaces": "node --test tests/prompt-workspaces-model.test.mjs",
     "test:desktop": "node --test tests/desktop-compat.test.mjs",
+    "test:sidebar": "node --test tests/sidebar-injection.test.mjs",
+    "test:official-sidebar": "node --test tests/official-sidebar.test.mjs",
+    "test:control-room-open": "node --test tests/control-room-open.test.mjs",
+    "test:add-project": "node --test tests/add-project-current-session.test.mjs",
+    "test:chat-pane": "node --test tests/chat-pane-contract.test.mjs",
+    "test:flowglass": "node --test tests/flowglass-peer-compat.test.mjs",
+    "test:flowglass-entry": "node scripts/prepare-flowglass-plugin.mjs && node --test tests/flowglass-public-entry.test.mjs",
+    "test:copy": "node --test tests/user-facing-copy.test.mjs",
+    "test:metadata-copy": "node --test tests/metadata-copy.test.mjs",
     "test:icons": "node --test tests/workspace-icons.test.mjs",
-    "test": "npm run test:gate && npm run test:anchor && npm run test:server && npm run test:browser && npm run test:reference && npm run test:highlight && npm run test:preview && npm run test:changes && npm run test:encoding && npm run test:prompt-workspaces && npm run test:desktop && npm run test:icons",
+    "test:official-pane-style": "node --test tests/official-pane-style.test.mjs",
+    "test:project-scope": "node --test tests/project-scope.test.mjs",
+    "test:bind-popover": "node --test tests/bind-popover-position.test.mjs",
+    "test:settings-layout": "node --test tests/settings-layout.test.mjs",
+    "test:icon-picker-viewport": "node --test tests/icon-picker-viewport.test.mjs",
+    "test:prompt-workspace-layout": "node --test tests/prompt-workspace-layout.test.mjs",
+    "test": "npm run test:gate && npm run test:anchor && npm run test:server && npm run test:server-lifecycle && npm run test:browser && npm run test:browser-and-status-icons && npm run test:reference && npm run test:highlight && npm run test:preview && npm run test:changes && npm run test:bind-session-groups && npm run test:encoding && npm run test:prompt-workspaces && npm run test:desktop && npm run test:sidebar && npm run test:official-sidebar && npm run test:control-room-open && npm run test:add-project && npm run test:chat-pane && npm run test:flowglass && npm run test:flowglass-entry && npm run test:copy && npm run test:metadata-copy && npm run test:icons && npm run test:official-pane-style && npm run test:project-scope && npm run test:bind-popover && npm run test:settings-layout && npm run test:icon-picker-viewport && npm run test:prompt-workspace-layout",
     "pack": "npm pack"
   },
   "peerDependencies": {
@@ -69,18 +94,11 @@
     }
   },
   "devDependencies": {
+    "@iconify-json/fluent-emoji-flat": "^1.2.6",
+    "dsh-flowglass": "file:vendor/dsh-flowglass-0.7.4.tgz",
     "esbuild": "^0.25.0",
     "highlight.js": "^11.12.0",
     "markdown-it": "^15.0.0",
     "xterm": "^5.3.0"
-  },
-  "dependencies": {
-    "dsh-flowglass": "file:vendor/dsh-flowglass-0.5.0.tgz"
-  },
-  "bundledDependencies": [
-    "dsh-flowglass"
-  ],
-  "bundleDependencies": [
-    "dsh-flowglass"
-  ]
+  }
 }

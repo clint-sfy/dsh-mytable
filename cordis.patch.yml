@@ -12,6 +12,3 @@
 - insert:
     - id: dsh-mytable
       name: dsh-mytable
-    # 随 dsh-mytable tarball 一起内嵌的原版流镜 Host + Client；用户无需再单独安装。
-    - id: dsh-mytable-flowglass
-      name: dsh-flowglass

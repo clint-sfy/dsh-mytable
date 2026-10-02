@@ -12,7 +12,7 @@
  * 失败路径不调用 process.exit（避免跳过 finally），统一收口到 process.exitCode。
  */
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -23,6 +23,19 @@ const BUNDLE_SRC = resolve(process.argv[2] ?? join(HERE, '..', 'lib', 'index.js'
 
 // 探测次数上界：正常解析（祖先链 + profiles 枚举）远低于此；旧代码循环重入会达到数千次
 const PROBE_BOUND = 100
+
+function copyRuntimePackage(isoDir, name) {
+  const source = join(HERE, '..', 'node_modules', ...name.split('/'))
+  const target = join(isoDir, 'node_modules', ...name.split('/'))
+  mkdirSync(dirname(target), { recursive: true })
+  cpSync(source, target, { recursive: true })
+}
+
+function prepareRuntimeDeps(isoDir) {
+  copyRuntimePackage(isoDir, '@deepseek-ai/cordis')
+  copyRuntimePackage(isoDir, '@deepseek-ai/cosmokit')
+  copyRuntimePackage(isoDir, '@standard-schema/spec')
+}
 
 let pass = 0
 const failures = []
@@ -57,6 +70,7 @@ function runChild(envHome, name, withOfficial = false) {
   try {
     mkdirSync(join(isoDir, 'lib'), { recursive: true })
     copyFileSync(BUNDLE_SRC, join(isoDir, 'lib', 'index.js'))
+    prepareRuntimeDeps(isoDir)
     if (withOfficial) {
       const pkgDir = join(isoDir, 'node_modules', '@deepseek-ai', 'dsh-home-paths')
       mkdirSync(join(pkgDir, 'lib'), { recursive: true })
@@ -90,7 +104,7 @@ function runChild(envHome, name, withOfficial = false) {
       "import { homedir } from 'node:os'",
       "const mod = await import(pathToFileURL(process.argv[1]).href)",
       "const routes = []",
-      "const fakeCtx = { webServer: { register: (r) => { routes.push(r) } }, effect: () => {}, logger: { warn() {}, info() {} } }",
+      "const fakeCtx = { webServer: { register: (r) => { routes.push(r) } }, effect: (setup) => setup(), logger: { warn() {}, info() {} } }",
       "mod.apply(fakeCtx)",
       "const route = routes.find((r) => r.path === '/api/worktable/workspaces')",
       "let status = 0; let body = ''",
@@ -144,6 +158,7 @@ function runChild(envHome, name, withOfficial = false) {
     try {
       mkdirSync(join(isoDir, 'lib'), { recursive: true })
       copyFileSync(BUNDLE_SRC, join(isoDir, 'lib', 'index.js'))
+      prepareRuntimeDeps(isoDir)
       const pkgDir = join(isoDir, 'node_modules', '@deepseek-ai', 'dsh-home-paths')
       mkdirSync(join(pkgDir, 'lib'), { recursive: true })
       writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh-home-paths', version: '0.1.2-rc.1', type: 'module', main: 'lib/index.js' }), 'utf8')
@@ -162,7 +177,7 @@ function runChild(envHome, name, withOfficial = false) {
         "import { pathToFileURL } from 'node:url'",
         "const mod = await import(pathToFileURL(process.argv[1]).href)",
         "const routes = []",
-        "const fakeCtx = { webServer: { register: (r) => { routes.push(r) } }, effect: () => {}, logger: { warn() {}, info() {} } }",
+        "const fakeCtx = { webServer: { register: (r) => { routes.push(r) } }, effect: (setup) => setup(), logger: { warn() {}, info() {} } }",
         "mod.apply(fakeCtx)",
         "const route = routes.find((r) => r.path === '/api/worktable/workspaces')",
         "let status = 0; let body = ''",

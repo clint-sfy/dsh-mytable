@@ -17,12 +17,12 @@ export function isDesktopApp(locationLike?: LocationLike | null): boolean {
   return current?.protocol === 'dsh-app:' && current?.hostname === 'app'
 }
 
-function parseWebOrigin(value: unknown): URL | null {
+function parseWebBase(value: unknown): URL | null {
   if (typeof value !== 'string' || value.length === 0 || value.trim() !== value) return null
   try {
     const parsed = new URL(value)
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
-    if (parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) return null
+    if (parsed.username || parsed.password || parsed.search || parsed.hash) return null
     return parsed
   } catch {
     return null
@@ -31,7 +31,7 @@ function parseWebOrigin(value: unknown): URL | null {
 
 /** Resolve an HTTP(S) web origin to the corresponding terminal WebSocket origin. */
 export function resolveWebSocketOrigin(webOrigin: unknown, locationOrigin: string): string | null {
-  const parsed = parseWebOrigin(webOrigin) ?? parseWebOrigin(locationOrigin)
+  const parsed = parseWebBase(webOrigin) ?? parseWebBase(locationOrigin)
   if (!parsed) return null
   return (parsed.protocol === 'https:' ? 'wss://' : 'ws://') + parsed.host
 }

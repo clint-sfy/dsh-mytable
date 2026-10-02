@@ -178,6 +178,17 @@ eq('C17 read 正文保留空行、去前缀', JSON.stringify(parseReadContent('<
 eq('C18 预览两侧：write 与 edit', JSON.stringify(previewSides(byId.get('c3'), ops)), JSON.stringify({ before: 'const a = 1', after: 'const a = 42' }))
 
 // ── D. 会话镜头的行级 diff ──────────────────────────────────────────────────
+const DESKTOP_EDITOR_EVENTS = [
+  { type: 'tool/call', seq: 20, time: 2000, turn: 3, qa: 2, data: { name: 'str_replace_editor', callId: 'desktop-create', arguments: JSON.stringify({ command: 'create', path: 'src/new.ts', file_text: 'export {}\n' }) } },
+  { type: 'tool/result', seq: 21, time: 2001, turn: 3, qa: 2, data: { message: { source: { kind: 'tool', callId: 'desktop-create' }, content: [{ type: 'tool-result', content: [{ type: 'text', text: 'created src/new.ts' }] }] } } },
+  { type: 'tool/call', seq: 22, time: 2002, turn: 3, qa: 2, data: { name: 'str_replace_editor', callId: 'desktop-edit', arguments: JSON.stringify({ command: 'str_replace', path: 'src/app.ts', old_str: 'old', new_str: 'new' }) } },
+]
+const desktopEditorOps = extractFileOps(DESKTOP_EDITOR_EVENTS)
+eq('C19 Desktop str_replace_editor create path', desktopEditorOps.find((o) => o.callId === 'desktop-create')?.path, 'src/new.ts')
+eq('C20 Desktop str_replace_editor create kind', desktopEditorOps.find((o) => o.callId === 'desktop-create')?.kind, 'write')
+eq('C21 Desktop str_replace_editor edit path', desktopEditorOps.find((o) => o.callId === 'desktop-edit')?.path, 'src/app.ts')
+eq('C22 Desktop str_replace_editor edit payload', JSON.stringify(desktopEditorOps.find((o) => o.callId === 'desktop-edit')?.edit), JSON.stringify({ oldString: 'old', newString: 'new' }))
+
 const rows = lineDiff('a\nb\nc', 'a\nB\nc')
 eq('D1 公共前后缀被掐掉：头尾各一行上下文 + 删 + 增', rows.length, 4)
 eq('D2 中间是删 + 增', `${rows[1].kind}${rows[2].kind}`, 'deladd')
