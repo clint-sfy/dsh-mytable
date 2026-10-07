@@ -496,7 +496,7 @@ export const css = xtermCss + '\n' + scopeCss(subagentViewCss, '.dsh-mt_sav') + 
   '.dsh-mt_jobDot-failed{color:#e5484d}',
   '.dsh-mt_jobDot-killed{color:#6e7683}',
   '.dsh-mt_jobDot-stopping{color:#9aa4b2}',
-  '.dsh-mt_termHost{flex:1;min-height:0;padding:8px;font-size:13px;background:var(--dsw-alias-bg-base,#0b0e14);overflow:hidden}',
+  '.dsh-mt_termHost{flex:1;min-width:0;min-height:0;box-sizing:border-box;padding:8px;font-size:13px;background:var(--dsw-alias-bg-base,#0b0e14);overflow:hidden}',
   '.dsh-mt_termHost .xterm{height:100%}',
   // 窗内标签页
   '.dsh-mt_tabBar{flex:none;display:flex;align-items:center;gap:3px;padding:3px 5px 0;border-bottom:1px solid var(--dsw-alias-border-l1,#262b36);background:var(--dsw-alias-fill-l1,rgba(255,255,255,.02));overflow-x:auto}',

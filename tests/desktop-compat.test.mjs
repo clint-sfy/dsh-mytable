@@ -95,3 +95,16 @@ test('plugin terminal uses interactive PowerShell as the Windows default shell',
   assert.doesNotMatch(setupTerminal, /cmd: 'cmd\.exe'/)
   assert.match(setupTerminal, /: \{ cmd: process\.env\.SHELL \|\| '\/bin\/bash', args: \[\] \}/)
 })
+
+test('small terminal panes load FitAddon and resize the PTY from the fitted geometry', () => {
+  const source = readFileSync(new URL('../src/client/split.tsx', import.meta.url), 'utf8')
+  const terminal = source.slice(source.indexOf('function TerminalPane()'), source.indexOf('\n/** markdown 渲染器'))
+  assert.match(source, /import \{ FitAddon \} from 'xterm-addon-fit'/)
+  assert.match(terminal, /fitAddon = new FitAddon\(\)/)
+  assert.match(terminal, /term\.loadAddon\(fitAddon\)/)
+  assert.match(terminal, /fitAddon\.fit\(\)/)
+  assert.doesNotMatch(terminal, /typeof term\.fit/)
+  assert.match(terminal, /scrollOnUserInput: true/)
+  assert.match(terminal, /term\.scrollToBottom\(\)/)
+  assert.match(terminal, /type: 'resize', cols: term\.cols, rows: term\.rows/)
+})

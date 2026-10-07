@@ -12,7 +12,7 @@ test('workspace files use the compact Harness file-tree geometry', () => {
 })
 
 test('terminal uses the Harness screen spacing and typography', () => {
-  assert.match(styles, /\.dsh-mt_termHost\{[^}]*padding:8px[^}]*font-size:13px/)
+  assert.match(styles, /\.dsh-mt_termHost\{[^}]*box-sizing:border-box[^}]*padding:8px[^}]*font-size:13px/)
   assert.match(styles, /\.dsh-mt_termHost\{[^}]*background:var\(--dsw-alias-bg-base/)
 })
 

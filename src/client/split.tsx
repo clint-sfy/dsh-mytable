@@ -16,6 +16,7 @@ import { copyText } from './clipboard'
 import { IconGo } from './browser-icons'
 import { WorkspaceIcon } from './icon-renderer'
 import { Terminal } from 'xterm'
+import { FitAddon } from 'xterm-addon-fit'
 import { resolveWebSocketOrigin } from './desktop-compat'
 
 import MarkdownIt from 'markdown-it'
@@ -2695,6 +2696,7 @@ function TerminalPane() {
     const el = hostRef.current
     if (!el) return
     let term: any = null
+    let fitAddon: FitAddon | null = null
     let ws: WebSocket | null = null
     let disposed = false
     let unsubTheme = () => {}
@@ -2719,14 +2721,30 @@ function TerminalPane() {
         fontFamily: 'Cascadia Code, Cascadia Mono, Consolas, Menlo, monospace',
         fontSize: 13,
         convertEol: true,
+        scrollback: 5000,
+        scrollOnUserInput: true,
         theme: xtermThemeOf(),
       })
+      fitAddon = new FitAddon()
+      term.loadAddon(fitAddon)
     } catch {
       cleanup()
       setFailed(T('pane.termFail'))
       return
     }
     term.open(el)
+    const fitToHost = (notifyPty = false) => {
+      // 隐藏中的终端（标签切走、常驻挂载）尺寸为 0：不 fit，避免把 pty 压成极小值。
+      if (el.clientWidth < 40 || el.clientHeight < 40) return
+      try {
+        if (fitAddon) fitAddon.fit()
+        term.scrollToBottom()
+        if (notifyPty && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
+        }
+      } catch {}
+    }
+    fitToHost()
     // 跟随宿主主题：深/浅切换时原地换 theme（不重建终端、不丢会话）
     unsubTheme = subscribeTermScheme(() => { try { term.options.theme = xtermThemeOf() } catch {} })
     // 强制自动换行（DECAWM on）：超长行在窗口宽度处换行，不被截断
@@ -2753,7 +2771,7 @@ function TerminalPane() {
       setFailed(T('pane.termFail'))
       return
     }
-    const url = wsOrigin + '/api/worktable/term?sessionId=' + encodeURIComponent(scope?.sessionId ?? '') + '&cwd=' + encodeURIComponent(scope?.cwd ?? '') + '&cols=80&rows=24'
+    const url = wsOrigin + '/api/worktable/term?sessionId=' + encodeURIComponent(scope?.sessionId ?? '') + '&cwd=' + encodeURIComponent(scope?.cwd ?? '') + '&cols=' + encodeURIComponent(String(term.cols)) + '&rows=' + encodeURIComponent(String(term.rows))
     try {
       ws = new WebSocket(url)
     } catch {
@@ -2761,7 +2779,7 @@ function TerminalPane() {
       setFailed(T('pane.termFail'))
       return
     }
-    ws.onopen = () => { focusTerm(); try { term.write('\x1b[?7h') } catch {} }
+    ws.onopen = () => { focusTerm(); fitToHost(true); try { term.write('\x1b[?7h') } catch {} }
     ws.onmessage = (ev) => { try { term.write(String(ev.data)) } catch {} }
     ws.onclose = () => { if (!disposed) { try { term.write('\r\n[连接已关闭]') } catch {} } }
     ws.onerror = () => {
@@ -2769,14 +2787,12 @@ function TerminalPane() {
       cleanup()
       setFailed(T('pane.termFail'))
     }
-    term.onData((d: string) => { if (ws && ws.readyState === 1) ws.send(d) })
+    term.onData((d: string) => {
+      try { term.scrollToBottom() } catch {}
+      if (ws && ws.readyState === 1) ws.send(d)
+    })
     ro = new ResizeObserver(() => {
-      // 隐藏中的终端（标签切走、常驻挂载）尺寸为 0：不 fit，避免把 pty 尺寸压成极小值
-      if (el.clientWidth < 40 || el.clientHeight < 40) return
-      if (typeof term.fit === 'function') {
-        try { term.fit() } catch {}
-        if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
-      }
+      fitToHost(true)
     })
     ro.observe(el)
     return cleanup
