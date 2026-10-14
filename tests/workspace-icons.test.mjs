@@ -110,3 +110,17 @@ test('项目主链路统一使用 workspace icon renderer', () => {
   const styles = readFileSync(new URL('../src/client/styles.ts', import.meta.url), 'utf8')
   assert.doesNotMatch(styles, /data-mt-icon\]\:\:before\{content:attr\(data-mt-icon\)/)
 })
+
+test('插件窗位选择器将 builtin 图标渲染成 SVG，按钮文案只显示标题', () => {
+  const split = readFileSync(new URL('../src/client/split.tsx', import.meta.url), 'utf8')
+  const pickerStart = split.indexOf('function PanePicker(')
+  const pickerEnd = split.indexOf('\ntype PoolItem', pickerStart)
+  assert.ok(pickerStart >= 0 && pickerEnd > pickerStart, 'PanePicker component should exist')
+  const picker = split.slice(pickerStart, pickerEnd)
+  const descriptor = { id: 'dsh-mytable-cost:chart', title: '成本分析', icon: 'builtin:chart' }
+
+  assert.match(iconSet.workspaceIconSvgMarkup(descriptor.icon), /<svg data-workspace-icon="builtin:chart"/)
+  assert.ok(/<span aria-hidden><WorkspaceIcon value=\{textOf\(d\.icon, '🧩'\)\} \/><\/span>\{textOf\(d\.title, d\.id\)\}/.test(picker),
+    'plugin pane should render its icon as SVG and its title as the only button text')
+  assert.doesNotMatch(picker, /<span aria-hidden>\{textOf\(d\.icon/)
+})

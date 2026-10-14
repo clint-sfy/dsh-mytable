@@ -3596,7 +3596,7 @@ function PanePicker(props: { row: PaneRow; index: number }) {
                 title={textOf(d.description)}
                 onClick={() => pick({ kind: 'plugin', id: d.id, title: textOf(d.title, d.id) })}
               >
-                <span aria-hidden>{textOf(d.icon, '🧩')}</span>{textOf(d.title, d.id)}
+                <span aria-hidden><WorkspaceIcon value={textOf(d.icon, '🧩')} /></span>{textOf(d.title, d.id)}
               </button>
             ))}
           </>
