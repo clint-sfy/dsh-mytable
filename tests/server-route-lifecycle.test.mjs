@@ -42,10 +42,10 @@ function makeHarness() {
 test('all HTTP routes can be applied again after the first context is disposed', () => {
   const harness = makeHarness()
   plugin.apply(harness.ctx)
-  assert.equal(harness.routes.length, 26, 'the lifecycle probe must cover every HTTP route')
+  assert.equal(harness.routes.length, 27, 'the lifecycle probe must cover every HTTP route, including plugin management')
   harness.dispose()
 
   assert.doesNotThrow(() => plugin.apply(harness.ctx))
-  assert.equal(harness.routes.length, 52)
+  assert.equal(harness.routes.length, 54)
   harness.dispose()
 })

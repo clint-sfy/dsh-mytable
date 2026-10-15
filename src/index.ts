@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { execFile } from 'node:child_process'
-import { readdirSync, realpathSync } from 'node:fs'
+import { existsSync, readdirSync, realpathSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { basename, dirname, resolve as pathResolve, sep } from 'node:path'
 import { createRequire } from 'node:module'
@@ -66,6 +66,7 @@ export const inject = ['webServer', 'sessions']
 export const HEALTH_PATH = '/api/worktable/health'
 /** 浏览器窗的目标站点探测路由（见 apply 内注释） */
 export const BROWSER_PROBE_PATH = '/api/worktable/browser/probe'
+export const PLUGIN_MANAGE_PATH = '/api/worktable/plugins/manage'
 
 const MAX_ENTRIES = 500
 
@@ -181,6 +182,47 @@ async function readJsonBody(req: any): Promise<any> {
   const text = Buffer.concat(chunks).toString('utf8')
   if (!text) return {}
   try { return JSON.parse(text) } catch { return {} }
+}
+
+type InstalledPlugin = { name: string; spec: string }
+
+/** 找到当前装有 dsh-mytable 的 profile；Desktop 优先，兼容自定义 profile。 */
+async function worktableProfile(): Promise<{ name: string; dir: string; plugins: InstalledPlugin[] }> {
+  const profilesRoot = pathResolve(resolveDshHomeSafe(), 'profiles')
+  let names: string[] = []
+  try { names = (await readdir(profilesRoot, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name) } catch {}
+  names.sort((a, b) => (a === 'desktop' ? -1 : b === 'desktop' ? 1 : a.localeCompare(b)))
+  for (const name of names) {
+    const dir = pathResolve(profilesRoot, name)
+    try {
+      const pkg = JSON.parse(await readFile(pathResolve(dir, 'package.json'), 'utf8'))
+      const deps = pkg?.dependencies && typeof pkg.dependencies === 'object' ? pkg.dependencies : {}
+      if (!Object.prototype.hasOwnProperty.call(deps, 'dsh-mytable')) continue
+      const plugins = Object.entries(deps)
+        .filter(([dep]) => dep !== 'dsh-mytable' && !dep.startsWith('@deepseek-ai/'))
+        .map(([dep, spec]) => ({ name: dep, spec: String(spec) }))
+      return { name, dir, plugins }
+    } catch {}
+  }
+  throw new Error('没有找到安装 dsh-mytable 的 DSH profile')
+}
+
+/** 直接调用 Desktop 自带 CLI，不经过 shell，来源字符串不会被解释成命令。 */
+function runDshPlugin(profile: string, action: 'add' | 'remove', value: string): Promise<string> {
+  const appDir = dirname(process.execPath)
+  const cli = pathResolve(appDir, 'resources', 'app.asar', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'cli.js')
+  if (!existsSync(cli)) throw new Error('当前环境找不到 DeepSeek Harness 插件管理器')
+  return new Promise((resolvePromise, reject) => {
+    execFile(process.execPath, ['--expose-internals', cli, 'plugin', '--profile', profile, action, value], {
+      windowsHide: true,
+      maxBuffer: 4 * 1024 * 1024,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    }, (err, stdout, stderr) => {
+      const output = (String(stdout || '') + '\n' + String(stderr || '')).trim()
+      if (err) reject(new Error(output || err.message))
+      else resolvePromise(output)
+    })
+  })
 }
 
 /** 列出一个目录层级（目录在前、大小写不敏感排序、上限 500、隐藏项标注） */
@@ -777,6 +819,49 @@ export async function apply(ctx: Context) {
     path: HEALTH_PATH,
     handler: (_req: any, res: any) => {
       json(res, 200, { plugin: 'dsh-mytable', version: PLUGIN_VERSION, ok: true })
+    },
+  })
+
+  registerRoute(ctx, webServer, {
+    kind: 'exact',
+    path: PLUGIN_MANAGE_PATH,
+    handler: async (req: any, res: any) => {
+      if (req.method !== 'POST') { json(res, 405, { error: 'method not allowed' }); return }
+      try {
+        const body = await readJsonBody(req)
+        const action = String(body?.action || '')
+        const profile = await worktableProfile()
+        if (action === 'list') {
+          json(res, 200, { ok: true, profile: profile.name, plugins: profile.plugins })
+          return
+        }
+        if (action === 'install') {
+          const source = String(body?.source || '').trim()
+          if (!source || source.length > 2048 || source.startsWith('-') || /[\0\r\n]/.test(source)) {
+            json(res, 400, { error: '插件来源无效' }); return
+          }
+          const output = await runDshPlugin(profile.name, 'add', source)
+          const refreshed = await worktableProfile()
+          json(res, 200, { ok: true, profile: profile.name, plugins: refreshed.plugins, output, restartRequired: true })
+          return
+        }
+        if (action === 'remove') {
+          const packageName = String(body?.packageName || '').trim()
+          if (packageName === 'dsh-mytable' || !/^(?:@[a-z0-9._~-]+\/)?[a-z0-9._~-]+$/i.test(packageName)) {
+            json(res, 400, { error: '插件包名无效或不可移除' }); return
+          }
+          if (!profile.plugins.some((item) => item.name === packageName)) {
+            json(res, 404, { error: '没有找到这个已安装插件' }); return
+          }
+          const output = await runDshPlugin(profile.name, 'remove', packageName)
+          const refreshed = await worktableProfile()
+          json(res, 200, { ok: true, profile: profile.name, plugins: refreshed.plugins, output, restartRequired: true })
+          return
+        }
+        json(res, 400, { error: '不支持的操作' })
+      } catch (error) {
+        json(res, 500, { error: error instanceof Error ? error.message : String(error) })
+      }
     },
   })
 

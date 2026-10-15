@@ -20,6 +20,7 @@ export type RecommendedPlugin = {
   name: string
   desc: string
   install: string
+  source?: string
   url?: string
 }
 

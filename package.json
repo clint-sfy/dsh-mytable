@@ -72,9 +72,10 @@
     "test:project-scope": "node --test tests/project-scope.test.mjs",
     "test:bind-popover": "node --test tests/bind-popover-position.test.mjs",
     "test:settings-layout": "node --test tests/settings-layout.test.mjs",
+    "test:plugin-management": "node --test tests/plugin-management-contract.test.mjs",
     "test:icon-picker-viewport": "node --test tests/icon-picker-viewport.test.mjs",
     "test:prompt-workspace-layout": "node --test tests/prompt-workspace-layout.test.mjs",
-    "test": "npm run test:gate && npm run test:anchor && npm run test:server && npm run test:server-lifecycle && npm run test:browser && npm run test:browser-and-status-icons && npm run test:reference && npm run test:highlight && npm run test:preview && npm run test:changes && npm run test:bind-session-groups && npm run test:encoding && npm run test:prompt-workspaces && npm run test:desktop && npm run test:sidebar && npm run test:official-sidebar && npm run test:control-room-open && npm run test:add-project && npm run test:chat-pane && npm run test:flowglass && npm run test:flowglass-entry && npm run test:copy && npm run test:metadata-copy && npm run test:icons && npm run test:official-pane-style && npm run test:project-scope && npm run test:bind-popover && npm run test:settings-layout && npm run test:icon-picker-viewport && npm run test:prompt-workspace-layout",
+    "test": "npm run test:gate && npm run test:anchor && npm run test:server && npm run test:server-lifecycle && npm run test:plugin-management && npm run test:browser && npm run test:browser-and-status-icons && npm run test:reference && npm run test:highlight && npm run test:preview && npm run test:changes && npm run test:bind-session-groups && npm run test:encoding && npm run test:prompt-workspaces && npm run test:desktop && npm run test:sidebar && npm run test:official-sidebar && npm run test:control-room-open && npm run test:add-project && npm run test:chat-pane && npm run test:flowglass && npm run test:flowglass-entry && npm run test:copy && npm run test:metadata-copy && npm run test:icons && npm run test:official-pane-style && npm run test:project-scope && npm run test:bind-popover && npm run test:settings-layout && npm run test:icon-picker-viewport && npm run test:prompt-workspace-layout",
     "pack": "npm pack"
   },
   "peerDependencies": {

@@ -33,6 +33,7 @@ import {
 } from './worktable-prefs'
 import { textOf, useMyTableRegistry } from './mytable-service'
 import { AddPluginModal, type AddPluginKind } from './AddPluginModal'
+import { WorkspaceIcon } from './icon-renderer'
 
 /** 座席 t 解析顺序：宿主给的 props.t → 插件在 apply 时绑定的命名空间 t（ctx.locale.bind(NS)）
  *  → zh 词典兜底。三者都不可用时至少显示键名，绝不抛错（设置页不能因为文案崩掉）。 */
@@ -148,11 +149,12 @@ function PrefCard(props: {
   on: boolean
   /** 插件注册项：卡上带 data-plugin-id，便于区分来源与自动化验收 */
   pluginId?: string
+  onRemove?: () => void
   onToggle: (next: boolean) => void
 }) {
   return (
     <div className="dsh-mt_setCard" data-off={!props.on} data-plugin-id={props.pluginId}>
-      <span className="dsh-mt_setIcon" aria-hidden>{props.icon}</span>
+      <span className="dsh-mt_setIcon"><WorkspaceIcon value={props.icon} /></span>
       <span className="dsh-mt_setName">{props.name}</span>
       <button
         type="button"
@@ -163,6 +165,9 @@ function PrefCard(props: {
         data-off={!props.on}
         onClick={() => props.onToggle(!props.on)}
       />
+      {props.onRemove ? (
+        <button type="button" className="dsh-mt_setRemove" aria-label={'remove ' + props.name} title={'remove ' + props.name} onClick={() => props.onRemove()}>×</button>
+      ) : null}
       {props.desc ? <span className="dsh-mt_setDesc">{props.desc}</span> : null}
     </div>
   )
@@ -176,8 +181,20 @@ export function WorktableSettingsSection(props: any) {
   const registry = useMyTableRegistry()
   const [adding, setAdding] = useState<AddPluginKind | null>(null)
 
-  /** 安装命令用哪个 profile：默认 mytable（本包的独立 profile 名）。 */
-  const installCommandFor = (spec: string) => 'cd ~/.dsh && dsh plugin --profile mytable add "' + spec + '"'
+  const removePackage = async (packageName: string) => {
+    if (!window.confirm(t('addplugin.removeConfirm', { name: packageName }))) return
+    try {
+      const response = await fetch('/api/worktable/plugins/manage', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'remove', packageName }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(String(data?.error || `HTTP ${response.status}`))
+      window.alert(t('addplugin.removed'))
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    }
+  }
 
   return (
     <div className="dsh-mt_set">
@@ -216,6 +233,7 @@ export function WorktableSettingsSection(props: any) {
               desc={textOf(d.description, t('settings.pluginSource'))}
               on={prefs.pluginPanes[d.id] !== false}
               pluginId={d.id}
+              onRemove={d.packageName ? () => void removePackage(d.packageName!) : undefined}
               onToggle={(next) => setPluginPanePref(d.id, next)}
             />
           ))}
@@ -251,6 +269,7 @@ export function WorktableSettingsSection(props: any) {
                 : t('settings.viewerAny'))}
               on={prefs.pluginViewers[d.id] !== false}
               pluginId={d.id}
+              onRemove={d.packageName ? () => void removePackage(d.packageName!) : undefined}
               onToggle={(next) => setPluginViewerPref(d.id, next)}
             />
           ))}
@@ -264,7 +283,6 @@ export function WorktableSettingsSection(props: any) {
         <AddPluginModal
           kind={adding}
           t={t}
-          installCommandFor={installCommandFor}
           onClose={() => setAdding(null)}
         />
       ) : null}

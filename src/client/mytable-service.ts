@@ -57,6 +57,8 @@ export type PaneDescriptor = {
   description?: string | (() => string)
   /** 文本图标（emoji/字符，与内置类型一致；可选）。 */
   icon?: string | (() => string)
+  /** 提供该窗口的可卸载包名；填写后设置卡片会显示移除按钮。 */
+  packageName?: string
   /** 排序权重，小的在前（缺省 1000，内置项用 10..60）。 */
   order?: number
   /** true = 不出现在选择器里（仅供其它入口直接打开）。 */
@@ -78,6 +80,8 @@ export type ViewerDescriptor = {
   description?: string | (() => string)
   /** 文本图标（可选）。 */
   icon?: string | (() => string)
+  /** 提供该预览器的可卸载包名；填写后设置卡片会显示移除按钮。 */
+  packageName?: string
   /** 接管的扩展名（带不带点都行）；空数组 = 兜底接管所有未命中文件。 */
   exts: readonly string[]
   /** 命中优先级，大的先匹配（缺省 0；内置家族相当于 -100）。 */

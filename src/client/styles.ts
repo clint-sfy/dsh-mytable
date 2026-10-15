@@ -1003,7 +1003,7 @@ export const css = xtermCss + '\n' + scopeCss(subagentViewCss, '.dsh-mt_sav') + 
   // 一排两个（面板更窄时自动落成一列）
   '.dsh-mt_setGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}',
   // 卡片：首行 [图标][名称][开关]，说明折到第二行整行
-  '.dsh-mt_setCard{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:4px 9px;min-height:62px;padding:9px 11px;border:1px solid var(--dsw-alias-border-l1,#262b36);border-radius:10px;background:var(--dsw-alias-bg-base,#0b0e14);box-sizing:border-box;transition:border-color .15s ease,background .15s ease,opacity .15s ease}',
+  '.dsh-mt_setCard{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:4px 9px;min-height:62px;padding:9px 11px;border:1px solid var(--dsw-alias-border-l1,#262b36);border-radius:10px;background:var(--dsw-alias-bg-base,#0b0e14);box-sizing:border-box;transition:border-color .15s ease,background .15s ease,opacity .15s ease}',
   '.dsh-mt_setCard:hover{border-color:var(--dsw-alias-border-l2,#3a4150);background:var(--dsw-alias-fill-l1,rgba(255,255,255,.035))}',
   '.dsh-mt_setCard[data-off=true]{opacity:.52}',
   '.dsh-mt_setIcon{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--dsw-alias-fill-l1,rgba(255,255,255,.045));font-size:15px;line-height:20px;text-align:center}',
@@ -1045,6 +1045,16 @@ export const css = xtermCss + '\n' + scopeCss(subagentViewCss, '.dsh-mt_sav') + 
   '.dsh-mt_addManualRow{display:flex;align-items:center;gap:6px}',
   '.dsh-mt_addHint{margin:0;font-size:10.5px;line-height:15px;color:var(--dsw-alias-label-tertiary,#7d8aa5)}',
   '.dsh-mt_addFail{margin:0;font-size:10.5px;line-height:15px;color:var(--dsw-alias-state-danger,#e5484d)}',
+  '.dsh-mt_addInstalled{display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1,#262b36)}',
+  '.dsh-mt_addInstalledRow{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1,#262b36);border-radius:8px;background:var(--dsw-alias-fill-l1,rgba(255,255,255,.02))}',
+  '.dsh-mt_addInstalledRow>span{display:flex;flex:1;min-width:0;flex-direction:column;gap:2px;font-size:12px}',
+  '.dsh-mt_addInstalledRow small{overflow:hidden;color:var(--dsw-alias-label-tertiary,#7d8aa5);font:10.5px/15px var(--dsw-font-mono,Consolas,monospace);text-overflow:ellipsis;white-space:nowrap}',
+  '.dsh-mt_addRemove{color:var(--dsw-alias-state-danger,#e5484d)}',
+  '.dsh-mt_addInstallStatus{margin:0;padding:8px 10px;border-radius:8px;background:var(--dsw-alias-fill-l1,rgba(255,255,255,.04));font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-secondary,#9aa4b2)}',
+  '.dsh-mt_addInstallStatus[data-status="installed"],.dsh-mt_addInstallStatus[data-status="removed"]{color:var(--dsw-alias-state-success,#2fb171)}',
+  '.dsh-mt_addInstallStatus[data-status="error"]{color:var(--dsw-alias-state-danger,#e5484d)}',
+  '.dsh-mt_setRemove{grid-column:4;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-tertiary,#7d8aa5);font-size:16px;line-height:1;cursor:pointer}',
+  '.dsh-mt_setRemove:hover{background:var(--dsw-alias-fill-l1,rgba(255,255,255,.06));color:var(--dsw-alias-state-danger,#e5484d)}',
   '.dsh-mt_paneOff{padding:10px 12px;text-align:center;font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-tertiary,#7d8aa5)}',
   // ── 文案工作区：限制文件 → 固定话语 → 当前需求 ──
   '.dsh-mt_pw{position:relative;flex:1;min-height:0;display:grid;grid-template-columns:190px minmax(0,1fr);overflow:hidden;color-scheme:inherit;background:var(--dsw-alias-bg-base,Canvas);color:var(--dsw-alias-label-primary,CanvasText);font-size:12px}',
