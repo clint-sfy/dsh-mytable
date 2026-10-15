@@ -186,6 +186,21 @@ async function readJsonBody(req: any): Promise<any> {
 
 type InstalledPlugin = { name: string; spec: string }
 
+/** 让用户可直接粘贴仓库网页地址；pnpm 对非 GitHub 的裸网页 URL 会按普通下载地址处理。 */
+export function normalizePluginSource(input: string): string {
+  const source = input.trim()
+  try {
+    const url = new URL(source)
+    const host = url.hostname.toLowerCase()
+    const parts = url.pathname.split('/').filter(Boolean)
+    if ((host === 'gitee.com' || host === 'github.com') && parts.length === 2 && !url.search && !url.hash) {
+      const repo = parts[1].replace(/\.git$/i, '')
+      return `git+https://${host}/${parts[0]}/${repo}.git`
+    }
+  } catch {}
+  return source
+}
+
 /** 找到当前装有 dsh-mytable 的 profile；Desktop 优先，兼容自定义 profile。 */
 async function worktableProfile(): Promise<{ name: string; dir: string; plugins: InstalledPlugin[] }> {
   const profilesRoot = pathResolve(resolveDshHomeSafe(), 'profiles')
@@ -836,7 +851,7 @@ export async function apply(ctx: Context) {
           return
         }
         if (action === 'install') {
-          const source = String(body?.source || '').trim()
+          const source = normalizePluginSource(String(body?.source || ''))
           if (!source || source.length > 2048 || source.startsWith('-') || /[\0\r\n]/.test(source)) {
             json(res, 400, { error: '插件来源无效' }); return
           }

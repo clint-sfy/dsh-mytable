@@ -6,6 +6,17 @@ const plugin = await import('../lib/index.js')
 const addPluginSource = readFileSync(new URL('../src/client/AddPluginModal.tsx', import.meta.url), 'utf8')
 const settingsSource = readFileSync(new URL('../src/client/SettingsSection.tsx', import.meta.url), 'utf8')
 
+test('plain Gitee repository URLs are normalized to an installable git source', () => {
+  assert.equal(
+    plugin.normalizePluginSource('https://gitee.com/clint_sfy/dsh-mytable'),
+    'git+https://gitee.com/clint_sfy/dsh-mytable.git',
+  )
+  assert.equal(
+    plugin.normalizePluginSource('https://gitee.com/clint_sfy/dsh-mytable.git'),
+    'git+https://gitee.com/clint_sfy/dsh-mytable.git',
+  )
+})
+
 function makeHarness() {
   const routes = []
   const effects = []
