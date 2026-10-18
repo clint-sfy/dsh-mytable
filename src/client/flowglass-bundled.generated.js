@@ -4200,9 +4200,10 @@ return {
           if (typeof tableCtx.effect === 'function') tableCtx.effect(() => dispose)
         })
       }
-      // 兜底：没有 cordis inject 时（例如被别的壳加载）直接看公开的注册表
-      if (typeof window !== 'undefined' && window.__dshMytable && typeof window.__dshMytable.registerPaneType === 'function') {
-        registerMyTablePane(window.__dshMytable)
+      // 兜底只在 Cordis 注入不可用时启用，避免热重载时同一窗口类型注册两次。
+      else if (typeof window !== 'undefined' && window.__dshMytable && typeof window.__dshMytable.registerPaneType === 'function') {
+        const fallbackDispose = registerMyTablePane(window.__dshMytable)
+        if (fallbackDispose && typeof ctx.effect === 'function') ctx.effect(() => fallbackDispose)
       }
     }
   },

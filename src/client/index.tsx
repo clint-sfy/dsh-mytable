@@ -3323,6 +3323,11 @@ export function apply(ctx: any) {
     ctx.provide('mytable', service)
     // 先公开服务，再启动源码内嵌的流镜；流镜启动时即可同步注册窗口类型。
     try { (window as any).__dshMytable = service } catch {}
+    ctx.effect(() => () => {
+      try {
+        if ((window as any).__dshMytable === service) delete (window as any).__dshMytable
+      } catch {}
+    }, 'dsh-mytable: clear public registry marker')
     // Desktop 只把顶层插件客户端加入模块表，子路径客户端不会被自动执行。
     // 因此在 mytable 服务就绪后，从顶层入口显式启动随包编译的 Flowglass 客户端。
     const flowglassClient = createBundledFlowglassClient((id: string) => {

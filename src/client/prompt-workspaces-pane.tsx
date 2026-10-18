@@ -66,6 +66,15 @@ function fileSafeName(value: string): string {
   return value.trim().replace(/[<>:"/\\|?*\u0000-\u001f]+/g, '-').replace(/[. ]+$/g, '').slice(0, 80) || 'template'
 }
 
+function WorkspaceTransferIcon({ direction }: { direction: 'import' | 'export' }) {
+  const importing = direction === 'import'
+  return <svg className="dsh-mt_pwTransferIcon" viewBox="0 0 20 20" aria-hidden="true">
+    <rect x="3" y="11" width="14" height="6" rx="2" fill={importing ? '#8b7cf6' : '#45b97c'} />
+    <path d="M5 12.5h10v2H5z" fill="#fff" opacity=".82" />
+    <path d={importing ? 'M10 2v9m-3-3 3 3 3-3' : 'M10 12V3M7 6l3-3 3 3'} fill="none" stroke={importing ? '#4f8ef7' : '#24a266'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+}
+
 export function PromptWorkspacesPane() {
   const [state, setState] = useState<PromptWorkspaceState>(loadState)
   const [requirement, setRequirement] = useState('')
@@ -83,6 +92,7 @@ export function PromptWorkspacesPane() {
   })
   const importRef = useRef<HTMLInputElement | null>(null)
   const templateImportRef = useRef<HTMLInputElement | null>(null)
+  const templateMenuRef = useRef<HTMLDetailsElement | null>(null)
   const templateDragIdRef = useRef<string | null>(null)
 
   const workspace = state.workspaces.find((w) => w.id === state.selectedWorkspaceId) ?? state.workspaces[0]
@@ -94,6 +104,24 @@ export function PromptWorkspacesPane() {
   useEffect(() => { try { localStorage.setItem(CONSTRAINTS_COLLAPSED_KEY, constraintsCollapsed ? '1' : '0') } catch {} }, [constraintsCollapsed])
   useEffect(() => { try { localStorage.setItem(FIXED_COLLAPSED_KEY, fixedCollapsed ? '1' : '0') } catch {} }, [fixedCollapsed])
   useEffect(() => { setRequirement(''); setStatus('') }, [state.selectedWorkspaceId, state.selectedTemplateId])
+  useEffect(() => {
+    const closeOnOutsidePointer = (event: PointerEvent): void => {
+      const menu = templateMenuRef.current
+      if (menu?.open && event.target instanceof Node && !menu.contains(event.target)) menu.open = false
+    }
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      const menu = templateMenuRef.current
+      if (event.key !== 'Escape' || !menu?.open) return
+      menu.open = false
+      menu.querySelector('summary')?.focus()
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer, true)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer, true)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [])
 
   const update = (mutator: (draft: PromptWorkspaceState) => void): void => {
     setState((previous) => {
@@ -108,6 +136,12 @@ export function PromptWorkspacesPane() {
     const ws = editWorkspace(draft)
     return ws.templates.find((t) => t.id === template.id) ?? ws.templates[0]
   }
+  const selectWorkspace = (workspaceId: string): void => update((draft) => {
+    const next = draft.workspaces.find((item) => item.id === workspaceId)
+    if (!next) return
+    draft.selectedWorkspaceId = next.id
+    draft.selectedTemplateId = next.templates[0].id
+  })
 
   const loadDirectory = async (constraintId: string, path: string, selectedPath = ''): Promise<void> => {
     setPicker({ constraintId, path, selectedPath, entries: [], loading: true, error: '' })
@@ -209,16 +243,13 @@ export function PromptWorkspacesPane() {
         </div>
         <div className="dsh-mt_pwWsList">
           {state.workspaces.map((item) => <div className="dsh-mt_pwWsItem" key={item.id} data-active={item.id === workspace.id}>
-            <button className="dsh-mt_pwWsIcon" type="button" title="更换工作区图标" aria-label={`更换 ${item.name} 的图标`} onClick={() => setIconWorkspaceId((value) => value === item.id ? null : item.id)}><WorkspaceIcon value={item.icon} /></button>
-            <button className="dsh-mt_pwWsName" type="button" onClick={() => update((draft) => {
-              const next = draft.workspaces.find((w) => w.id === item.id)!
-              draft.selectedWorkspaceId = next.id; draft.selectedTemplateId = next.templates[0].id
-            })}>{item.name}</button>
+            <button className="dsh-mt_pwWsIcon" type="button" title={sidebarCollapsed ? `打开 ${item.name}` : '更换工作区图标'} aria-label={sidebarCollapsed ? `打开 ${item.name}` : `更换 ${item.name} 的图标`} onClick={() => sidebarCollapsed ? selectWorkspace(item.id) : setIconWorkspaceId((value) => value === item.id ? null : item.id)}><WorkspaceIcon value={item.icon} /></button>
+            <button className="dsh-mt_pwWsName" type="button" onClick={() => selectWorkspace(item.id)}>{item.name}</button>
           </div>)}
         </div>
         <div className="dsh-mt_pwSideActions">
-          <button type="button" title="导入工作区文件" aria-label="导入工作区文件" onClick={() => importRef.current?.click()}><span aria-hidden>📥</span><span className="dsh-mt_pwActionText">导入工作区文件</span></button>
-          <button type="button" title="导出到本地文件" aria-label="导出到本地文件" onClick={() => downloadState(state)}><span aria-hidden>📤</span><span className="dsh-mt_pwActionText">导出到本地文件</span></button>
+          <button type="button" title="导入工作区文件" aria-label="导入工作区文件" onClick={() => importRef.current?.click()}><WorkspaceTransferIcon direction="import" /><span className="dsh-mt_pwActionText">导入工作区文件</span></button>
+          <button type="button" title="导出到本地文件" aria-label="导出到本地文件" onClick={() => downloadState(state)}><WorkspaceTransferIcon direction="export" /><span className="dsh-mt_pwActionText">导出到本地文件</span></button>
           <input ref={importRef} hidden type="file" accept=".json,application/json" onChange={(event) => void importFile(event)} />
         </div>
       </aside>
@@ -246,14 +277,20 @@ export function PromptWorkspacesPane() {
         <section className="dsh-mt_pwCard dsh-mt_pwTemplate">
           <input aria-label="模板名称" value={template.name} onChange={(event) => update((draft) => { editTemplate(draft).name = event.target.value })} />
           <span className="dsh-mt_pwTemplateActions">
-            <button type="button" onClick={() => templateImportRef.current?.click()}>导入模板</button>
-            <button type="button" onClick={exportCurrentTemplate}>导出模板</button>
-            <button type="button" className="dsh-mt_pwDanger" disabled={workspace.templates.length <= 1} onClick={() => {
-              if (workspace.templates.length <= 1 || !confirm(`删除模板“${template.name}”？`)) return
-              update((draft) => {
-                const ws = editWorkspace(draft); ws.templates = ws.templates.filter((t) => t.id !== template.id); draft.selectedTemplateId = ws.templates[0].id
-              })
-            }}>删除模板</button>
+            <details ref={templateMenuRef} className="dsh-mt_pwTemplateMenu">
+              <summary>模板操作 ▾</summary>
+              <div>
+                <button type="button" onClick={() => templateImportRef.current?.click()}>导入模板</button>
+                <button type="button" onClick={exportCurrentTemplate}>导出模板</button>
+                <button type="button" className="dsh-mt_pwDanger" disabled={workspace.templates.length <= 1} onClick={() => {
+                  if (workspace.templates.length <= 1 || !confirm(`删除模板“${template.name}”？`)) return
+                  update((draft) => {
+                    const ws = editWorkspace(draft); ws.templates = ws.templates.filter((t) => t.id !== template.id); draft.selectedTemplateId = ws.templates[0].id
+                  })
+                }}>删除模板</button>
+              </div>
+            </details>
+            <button type="button" className="dsh-mt_pwFill" disabled={!requirement.trim()} onClick={fillCurrentDraft}>填入当前聊天框</button>
             <input ref={templateImportRef} hidden type="file" accept=".json,application/json" onChange={(event) => void importTemplateFile(event)} />
           </span>
         </section>
@@ -302,7 +339,7 @@ export function PromptWorkspacesPane() {
           <div className="dsh-mt_pwCardHead"><strong>3. 当前需求</strong><span>始终位于最下面；填入成功后清空</span></div>
           <textarea className="dsh-mt_pwNeed" value={requirement} placeholder="输入这一次要 AI 完成的具体需求…" onChange={(event) => setRequirement(event.target.value)} />
           <details><summary>预览最终文案</summary><pre>{preview}</pre></details>
-          <div className="dsh-mt_pwSubmit"><span data-error={status.includes('失败')}>{status}</span><button type="button" disabled={!requirement.trim()} onClick={fillCurrentDraft}>填入当前聊天框</button></div>
+          <div className="dsh-mt_pwSubmit"><span data-error={status.includes('失败')}>{status}</span></div>
         </section>
       </main>
 

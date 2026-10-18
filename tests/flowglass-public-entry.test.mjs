@@ -38,6 +38,17 @@ test('top-level source starts Flowglass directly after exposing mytable', () => 
   assert.match(generated, /let host = \{[\s\S]*?call\(methodName, args\)[\s\S]*?Flowglass 服务正在连接/, 'early pane renders need a safe connecting facade')
 })
 
+test('desktop hot reload cannot double-register Flowglass or retain stale globals', () => {
+  const client = readFileSync(join(root, 'src/client/index.tsx'), 'utf8')
+  const generated = readFileSync(join(root, 'src/client/flowglass-bundled.generated.js'), 'utf8')
+  assert.match(generated, /if \(typeof ctx\.inject === ['"]function['"]\)[\s\S]*?else if \(typeof window !== ['"]undefined['"]/,
+    'the global registry must only be a fallback when Cordis injection is unavailable')
+  assert.match(generated, /const fallbackDispose = registerMyTablePane\(window\.__dshMytable\)[\s\S]*?ctx\.effect\(\(\) => fallbackDispose\)/,
+    'fallback pane registration must be disposed with the plugin context')
+  assert.match(client, /ctx\.effect\(\(\) => \(\) => \{[\s\S]*?__dshMytable === service[\s\S]*?delete \(window as any\)\.__dshMytable/,
+    'the current service marker must be removed when this plugin instance stops')
+})
+
 test('top-level host source applies Flowglass without a child Cordis component', () => {
   const host = readFileSync(join(root, 'src/index.ts'), 'utf8')
   assert.match(host, /import \{ apply as applyFlowglassHost \} from ['"]dsh-flowglass['"]/) 

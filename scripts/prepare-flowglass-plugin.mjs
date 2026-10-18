@@ -47,6 +47,33 @@ if (!source.includes('registerPaneType') || !source.includes('dsh-flowglass:flow
   throw new Error('Flowglass worktable registration is missing')
 }
 
+const paneRegistrationBlock = `      if (typeof ctx.inject === 'function') {
+        ctx.inject(['mytable'], (tableCtx) => {
+          const dispose = registerMyTablePane(tableCtx.get('mytable'))
+          if (!dispose) return
+          if (typeof tableCtx.effect === 'function') tableCtx.effect(() => dispose)
+        })
+      }
+      // 兜底：没有 cordis inject 时（例如被别的壳加载）直接看公开的注册表
+      if (typeof window !== 'undefined' && window.__dshMytable && typeof window.__dshMytable.registerPaneType === 'function') {
+        registerMyTablePane(window.__dshMytable)
+      }`
+const lifecycleSafePaneRegistration = `      if (typeof ctx.inject === 'function') {
+        ctx.inject(['mytable'], (tableCtx) => {
+          const dispose = registerMyTablePane(tableCtx.get('mytable'))
+          if (!dispose) return
+          if (typeof tableCtx.effect === 'function') tableCtx.effect(() => dispose)
+        })
+      }
+      // 兜底只在 Cordis 注入不可用时启用，避免热重载时同一窗口类型注册两次。
+      else if (typeof window !== 'undefined' && window.__dshMytable && typeof window.__dshMytable.registerPaneType === 'function') {
+        const fallbackDispose = registerMyTablePane(window.__dshMytable)
+        if (fallbackDispose && typeof ctx.effect === 'function') ctx.effect(() => fallbackDispose)
+      }`
+const normalizedPaneSource = source.replace(/\r\n/g, '\n')
+if (!normalizedPaneSource.includes(paneRegistrationBlock)) throw new Error('Flowglass pane registration fallback block was not found')
+source = normalizedPaneSource.replace(paneRegistrationBlock, lifecycleSafePaneRegistration)
+
 const factoryMarker = 'factory: (require) => {'
 const factoryStart = source.indexOf(factoryMarker)
 const factoryEnd = source.lastIndexOf('\n  },\n})')
