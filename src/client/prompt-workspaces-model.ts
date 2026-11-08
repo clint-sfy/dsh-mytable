@@ -99,13 +99,12 @@ export function buildWorkspacePrompt(template: PromptTemplate, requirement: stri
     append: '只允许在末尾追加，不要改写或删除已有内容',
   }
   const constraints = template.constraints.filter((c) => c.path.trim())
-  if (constraints.length) {
-    lines.push('【限制文件】')
-    constraints.forEach((c, index) => {
-      const permission = accessLabels[c.mode]
-      lines.push(`${index + 1}. ${c.path.trim()} （${permission}）${c.note.trim() ? `：${c.note.trim()}` : ''}`)
-    })
-  }
+  lines.push('【限制文件】')
+  constraints.forEach((c, index) => {
+    const permission = accessLabels[c.mode]
+    lines.push(`${index + 1}. ${c.path.trim()} （${permission}）${c.note.trim() ? `：${c.note.trim()}` : ''}`)
+  })
+  lines.push('仅可访问上方列出的文件或文件夹及其范围；当前工作区内的其他文件或文件夹一律不允许读取、引用或写入。')
   const fixed = template.fixedTexts.map((v) => v.trim()).filter(Boolean)
   if (fixed.length) {
     if (lines.length) lines.push('')

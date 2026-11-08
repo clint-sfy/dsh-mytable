@@ -1,7 +1,7 @@
 {
   "name": "dsh-mytable",
   "description": "工作台：在 DSH 中管理项目、会话与本地工作区的插件。",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "entry": {
     "name": "dsh-mytable",
     "inject": []

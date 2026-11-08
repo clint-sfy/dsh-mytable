@@ -22,6 +22,18 @@ const CONSTRAINTS_COLLAPSED_KEY = 'dsh.mytable.promptWorkspaces.constraintsColla
 const FIXED_COLLAPSED_KEY = 'dsh.mytable.promptWorkspaces.fixedCollapsed.v1'
 type Entry = { name: string; path: string; isDir: boolean }
 type PickerState = { constraintId: string; path: string; selectedPath: string; entries: Entry[]; loading: boolean; error: string }
+type PromptSkill = { id: string; name: string; description: string; source: string }
+
+async function fetchPromptSkills(body: Record<string, unknown>): Promise<any> {
+  const response = await fetch('/api/worktable/skills', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || data?.ok !== true) throw new Error(data?.error || `HTTP ${response.status}`)
+  return data
+}
 
 function loadState(): PromptWorkspaceState {
   try {
@@ -79,6 +91,10 @@ export function PromptWorkspacesPane() {
   const [state, setState] = useState<PromptWorkspaceState>(loadState)
   const [requirement, setRequirement] = useState('')
   const [status, setStatus] = useState('')
+  const [skills, setSkills] = useState<PromptSkill[]>([])
+  const [selectedSkillId, setSelectedSkillId] = useState('')
+  const [skillListLoading, setSkillListLoading] = useState(true)
+  const [skillError, setSkillError] = useState('')
   const [picker, setPicker] = useState<PickerState | null>(null)
   const [constraintsCollapsed, setConstraintsCollapsed] = useState(() => {
     try { return localStorage.getItem(CONSTRAINTS_COLLAPSED_KEY) === '1' } catch { return false }
@@ -97,12 +113,32 @@ export function PromptWorkspacesPane() {
 
   const workspace = state.workspaces.find((w) => w.id === state.selectedWorkspaceId) ?? state.workspaces[0]
   const template = workspace.templates.find((t) => t.id === state.selectedTemplateId) ?? workspace.templates[0]
-  const preview = useMemo(() => buildWorkspacePrompt(template, requirement), [template, requirement])
+  const skillSessionId = splitScope()?.sessionId ?? ''
+  const selectedSkill = skills.find((skill) => skill.id === selectedSkillId) ?? null
+  const preview = useMemo(() => {
+    const prompt = buildWorkspacePrompt(template, requirement)
+    if (!selectedSkill) return prompt
+    return `请使用 Skill「${selectedSkill.name}」完成以下任务：\n\n${prompt}`
+  }, [template, requirement, selectedSkill])
 
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {} }, [state])
   useEffect(() => { try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? '1' : '0') } catch {} }, [sidebarCollapsed])
   useEffect(() => { try { localStorage.setItem(CONSTRAINTS_COLLAPSED_KEY, constraintsCollapsed ? '1' : '0') } catch {} }, [constraintsCollapsed])
   useEffect(() => { try { localStorage.setItem(FIXED_COLLAPSED_KEY, fixedCollapsed ? '1' : '0') } catch {} }, [fixedCollapsed])
+  useEffect(() => {
+    let active = true
+    setSkills([])
+    setSelectedSkillId('')
+    setSkillError('')
+    setSkillListLoading(true)
+    void fetchPromptSkills({ action: 'list', sessionId: skillSessionId }).then((data) => {
+      if (!active) return
+      setSkills(Array.isArray(data.skills) ? data.skills : [])
+    }).catch((error) => {
+      if (active) setSkillError('读取 Skill 列表失败：' + String(error instanceof Error ? error.message : error))
+    }).finally(() => { if (active) setSkillListLoading(false) })
+    return () => { active = false }
+  }, [skillSessionId])
   useEffect(() => { setRequirement(''); setStatus('') }, [state.selectedWorkspaceId, state.selectedTemplateId])
   useEffect(() => {
     const closeOnOutsidePointer = (event: PointerEvent): void => {
@@ -290,13 +326,25 @@ export function PromptWorkspacesPane() {
                 }}>删除模板</button>
               </div>
             </details>
-            <button type="button" className="dsh-mt_pwFill" disabled={!requirement.trim()} onClick={fillCurrentDraft}>填入当前聊天框</button>
+            <select
+              className="dsh-mt_pwSkillSelect"
+              aria-label="选择 Skill（可选）"
+              title={selectedSkill?.description || '选择一个 Skill；也可以不使用'}
+              value={selectedSkillId}
+              disabled={skillListLoading || skills.length === 0}
+              onChange={(event) => setSelectedSkillId(event.currentTarget.value)}
+            >
+              <option value="">{skillListLoading ? '读取 Skill…' : '不使用 Skill'}</option>
+              {skills.map((skill) => <option key={skill.id} value={skill.id}>{skill.name} · {skill.source}</option>)}
+            </select>
+            {skillError && <span className="dsh-mt_pwSkillError" title={skillError}>Skill 不可用</span>}
+            <button type="button" className="dsh-mt_pwFill" disabled={!requirement.trim()} onClick={fillCurrentDraft}>填入</button>
             <input ref={templateImportRef} hidden type="file" accept=".json,application/json" onChange={(event) => void importTemplateFile(event)} />
           </span>
         </section>
 
         <section className="dsh-mt_pwCard">
-          <div className="dsh-mt_pwCardHead"><span className="dsh-mt_pwCardTitle"><strong>1. 限制文件</strong><small>文件或文件夹；选择仅阅读或允许编辑</small></span><button type="button" className="dsh-mt_pwFold" aria-expanded={!constraintsCollapsed} onClick={() => setConstraintsCollapsed((value) => !value)}>{constraintsCollapsed ? '展开' : '收起'}</button></div>
+          <div className="dsh-mt_pwCardHead"><span className="dsh-mt_pwCardTitle"><strong>1. 限制文件</strong><small>文件或文件夹；选择访问权限，其他文件默认禁止读取和写入</small></span><button type="button" className="dsh-mt_pwFold" aria-expanded={!constraintsCollapsed} onClick={() => setConstraintsCollapsed((value) => !value)}>{constraintsCollapsed ? '展开' : '收起'}</button></div>
           {!constraintsCollapsed && <div className="dsh-mt_pwCardBody">{template.constraints.map((constraint) => <div className="dsh-mt_pwConstraint" key={constraint.id}>
             <input value={constraint.path} placeholder="文件路径（可直接填写）" onChange={(event) => update((draft) => {
               const item = editTemplate(draft).constraints.find((c) => c.id === constraint.id); if (item) item.path = event.target.value

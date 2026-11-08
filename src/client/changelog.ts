@@ -1,6 +1,13 @@
 /** 控制室更新公告正文。呈现时按纯文本保留换行，不做 Markdown 渲染。 */
-export const CHANGELOG_VERSION = 'v0.1.1'
-export const CHANGELOG_CURRENT = `更新公告 · v0.1.1
+export const CHANGELOG_VERSION = 'v0.1.2'
+export const CHANGELOG_CURRENT = `更新公告 · v0.1.2
+
+🧩 文案工作区
+
+- 可选 Skill 会以“请使用 Skill「名称」完成以下任务”写入提示词，不再粘贴整份技能说明
+- 设置限制文件后，自动声明未列出的工作区文件禁止读取、引用或写入
+
+📦 此前版本 · v0.1.1
 
 🖥️ 官方 Desktop
 

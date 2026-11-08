@@ -738,7 +738,7 @@ function boxPayload(x0: number, y0: number, x1: number, y1: number): { primary: 
 }
 
 /** 更新方法：复制给 AI 的升级指令（本包不自更新；升级 = 重新 build + pack + remove→add 重装 + 重启 profile） */
-const UPGRADE_CMD = 'cd C:/MyProject/deepseek/work_table/dsh-mytable; npm run build; npm pack; dsh plugin --profile mytable remove dsh-mytable; dsh plugin --profile mytable add "file:C:/MyProject/deepseek/work_table/dsh-mytable/dsh-mytable-0.1.1.tgz"'
+const UPGRADE_CMD = 'cd C:/MyProject/deepseek/work_table/dsh-mytable; npm run build; npm pack; dsh plugin --profile mytable remove dsh-mytable; dsh plugin --profile mytable add "file:C:/MyProject/deepseek/work_table/dsh-mytable/dsh-mytable-0.1.2.tgz"'
 const UPGRADE_AI = '帮我升级 dsh-mytable（工作台）：在终端执行 ' + UPGRADE_CMD + '，完成后提醒我重启 dsh --profile mytable 并刷新页面'
 
 async function copyTextSafe(text: string): Promise<boolean> {
@@ -2809,6 +2809,11 @@ const mdRenderer = new MarkdownIt({
   linkify: true,
   highlight: (code: string, lang: string) => highlightFence(code, lang),
 })
+
+/** 供工作台内其它内容窗复用同一 Markdown 排版与代码着色。 */
+export function renderMarkdown(text: string): string {
+  return mdRenderer.render(text)
+}
 
 const IMAGE_EXTS = /[.](png|jpe?g|gif|webp|svg|bmp|ico)$/i
 const MD_EXTS = /[.](md|markdown|mdown)$/i

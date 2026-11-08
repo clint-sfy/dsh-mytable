@@ -43,24 +43,24 @@ npm install --global pnpm
 
 ### Desktop（首选）
 
-在官方 Desktop 的插件页面中选择本地的 `dsh-mytable-0.1.1.tgz` 文件。
+在官方 Desktop 的插件页面中选择本地的 `dsh-mytable-0.1.2.tgz` 文件。
 
 应用内插件管理使用 Desktop 自带的 pnpm，不需要在系统中另行安装 pnpm。安装或更新后按 Desktop 的提示重新加载/重启应用。
 
 命令行仅作为高级备用方式，执行：
 
 ```bash
-dsh plugin --profile desktop add "路径/到/dsh-mytable-0.1.1.tgz"
+dsh plugin --profile desktop add "路径/到/dsh-mytable-0.1.2.tgz"
 ```
 
-本地包也可以替换为 `"路径/到/dsh-mytable-0.1.1.tgz"`。完成后再启动 Desktop。
+本地包也可以替换为 `"路径/到/dsh-mytable-0.1.2.tgz"`。完成后再启动 Desktop。
 
 ### Web
 
-使用本地 `dsh-mytable-0.1.1.tgz` 安装：
+使用本地 `dsh-mytable-0.1.2.tgz` 安装：
 
 ```bash
-npx --yes @deepseek-ai/dsh plugin --profile web add "路径/到/dsh-mytable-0.1.1.tgz"
+npx --yes @deepseek-ai/dsh plugin --profile web add "路径/到/dsh-mytable-0.1.2.tgz"
 npx --yes @deepseek-ai/dsh web
 ```
 
@@ -76,7 +76,7 @@ http://127.0.0.1:3080
 
 ### 方法一：使用本地安装包
 
-1. 准备 `dsh-mytable-0.1.1.tgz`。
+1. 准备 `dsh-mytable-0.1.2.tgz`。
 2. 在安装包所在目录打开终端。
 3. 执行安装和启动命令。
 
@@ -84,7 +84,7 @@ PowerShell 示例：
 
 ```powershell
 cd $HOME\Downloads
-npx --yes @deepseek-ai/dsh plugin --profile web add ".\dsh-mytable-0.1.1.tgz"
+npx --yes @deepseek-ai/dsh plugin --profile web add ".\dsh-mytable-0.1.2.tgz"
 npx --yes @deepseek-ai/dsh web
 ```
 
@@ -92,7 +92,7 @@ macOS / Linux 示例：
 
 ```bash
 cd ~/Downloads
-npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.1.tgz
+npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.2.tgz
 npx --yes @deepseek-ai/dsh web
 ```
 
@@ -104,11 +104,11 @@ cd dsh-mytable
 npm install
 npm run build
 npm pack
-npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.1.tgz
+npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.2.tgz
 npx --yes @deepseek-ai/dsh web
 ```
 
-仓库已经自带 `vendor/dsh-flowglass-0.7.4.tgz`，单独 clone 这个仓库即可，不需要额外下载或克隆 `dsh-flowglass`。`npm pack` 生成的 `dsh-mytable-0.1.1.tgz` 也会内置运行所需的 Flowglass 依赖。
+仓库已经自带 `vendor/dsh-flowglass-0.7.4.tgz`，单独 clone 这个仓库即可，不需要额外下载或克隆 `dsh-flowglass`。`npm pack` 生成的 `dsh-mytable-0.1.2.tgz` 也会内置运行所需的 Flowglass 依赖。
 
 ## 第一次部署 DSH
 
@@ -128,7 +128,7 @@ npx --yes @deepseek-ai/dsh web
 首次启动确认 DSH 正常后，按 `Ctrl+C` 停止，再安装本插件：
 
 ```bash
-npx --yes @deepseek-ai/dsh plugin --profile web add "路径/到/dsh-mytable-0.1.1.tgz"
+npx --yes @deepseek-ai/dsh plugin --profile web add "路径/到/dsh-mytable-0.1.2.tgz"
 npx --yes @deepseek-ai/dsh web
 ```
 
@@ -143,7 +143,7 @@ npm install --global @deepseek-ai/dsh pnpm
 之后命令可以简写为：
 
 ```bash
-dsh plugin --profile web add "路径/到/dsh-mytable-0.1.1.tgz"
+dsh plugin --profile web add "路径/到/dsh-mytable-0.1.2.tgz"
 dsh web
 ```
 
@@ -155,7 +155,7 @@ dsh web
 
 ```bash
 npx --yes @deepseek-ai/dsh --profile mytable --from-default-profile web --dump-config
-npx --yes @deepseek-ai/dsh plugin --profile mytable add "路径/到/dsh-mytable-0.1.1.tgz"
+npx --yes @deepseek-ai/dsh plugin --profile mytable add "路径/到/dsh-mytable-0.1.2.tgz"
 npx --yes @deepseek-ai/dsh --profile mytable
 ```
 
@@ -244,14 +244,14 @@ Flowglass 依赖已保存在仓库内的 `vendor/` 目录；无需在本仓库�
 生成：
 
 ```text
-dsh-mytable-0.1.1.tgz
+dsh-mytable-0.1.2.tgz
 ```
 
 安装本地构建：
 
 ```bash
 npx --yes @deepseek-ai/dsh plugin --profile web remove dsh-mytable
-npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.1.tgz
+npx --yes @deepseek-ai/dsh plugin --profile web add ./dsh-mytable-0.1.2.tgz
 npx --yes @deepseek-ai/dsh web
 ```
 
@@ -271,7 +271,7 @@ npm pack        # 生成可安装的 tgz
 1. 更新 `package.json`、`dsh.plugin.json` 中的版本号。
 2. 执行 `npm run build`。
 3. 执行 `npm pack`。
-4. 检查生成的 `dsh-mytable-0.1.1.tgz` 内容。
+4. 检查生成的 `dsh-mytable-0.1.2.tgz` 内容。
 
 仓库可以添加 `dsh-plugin` topic，方便 DSH 用户发现插件。
 

@@ -7,6 +7,7 @@ import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { extractFrameAncestors, type BrowserProbeResult } from './browser-policy'
+import { listLocalSkillFiles, listLocalSkills, readLocalSkill, writeLocalSkill, type LocalSkillRoot } from './local-skills'
 import { apply as applyFlowglassHost } from 'dsh-flowglass'
 
 /**
@@ -64,6 +65,7 @@ export const name = 'dsh-mytable'
 export const inject = ['webServer', 'sessions']
 
 export const HEALTH_PATH = '/api/worktable/health'
+export const LOCAL_SKILLS_PATH = '/api/worktable/skills'
 /** 浏览器窗的目标站点探测路由（见 apply 内注释） */
 export const BROWSER_PROBE_PATH = '/api/worktable/browser/probe'
 export const PLUGIN_MANAGE_PATH = '/api/worktable/plugins/manage'
@@ -169,6 +171,29 @@ function serverCwd(ctx: any, sessionId?: string, clientCwd?: string): string {
   }
   if (typeof clientCwd === 'string' && clientCwd) return clientCwd
   return process.cwd()
+}
+
+/** Skill 文件只从固定的个人目录与当前 DSH 对话对应的项目目录中发现。 */
+function localSkillRoots(ctx: any, sessionId?: string): LocalSkillRoot[] {
+  const roots: LocalSkillRoot[] = [
+    { id: 'user-agents', label: '个人技能', path: pathResolve(homedir(), '.agents', 'skills') },
+    { id: 'user-codex', label: '个人技能', path: pathResolve(homedir(), '.codex', 'skills') },
+    { id: 'user-claude', label: '个人技能', path: pathResolve(homedir(), '.claude', 'skills') },
+  ]
+  if (sessionId) {
+    try {
+      const cwd = ctx.sessions?.get?.(sessionId)?.header?.cwd
+      if (typeof cwd === 'string' && cwd.trim()) {
+        const project = pathResolve(cwd)
+        roots.push(
+          { id: 'project-agents', label: '项目技能', path: pathResolve(project, '.agents', 'skills') },
+          { id: 'project-codex', label: '项目技能', path: pathResolve(project, '.codex', 'skills') },
+          { id: 'project-claude', label: '项目技能', path: pathResolve(project, '.claude', 'skills') },
+        )
+      }
+    } catch {}
+  }
+  return roots
 }
 
 function json(res: any, status: number, body: unknown) {
@@ -834,6 +859,46 @@ export async function apply(ctx: Context) {
     path: HEALTH_PATH,
     handler: (_req: any, res: any) => {
       json(res, 200, { plugin: 'dsh-mytable', version: PLUGIN_VERSION, ok: true })
+    },
+  })
+
+  registerRoute(ctx, webServer, {
+    kind: 'exact',
+    path: LOCAL_SKILLS_PATH,
+    handler: async (req: any, res: any) => {
+      if (req.method !== 'POST') { json(res, 405, { error: 'method not allowed' }); return }
+      try {
+        const body = await readJsonBody(req)
+        const roots = localSkillRoots(ctx, typeof body?.sessionId === 'string' ? body.sessionId : undefined)
+        const action = String(body?.action || 'list')
+        if (action === 'list') {
+          json(res, 200, { ok: true, skills: await listLocalSkills(roots) })
+          return
+        }
+        const id = typeof body?.id === 'string' ? body.id : ''
+        if (!id) { json(res, 400, { error: '请选择一个技能' }); return }
+        if (action === 'files') {
+          const files = await listLocalSkillFiles(roots, id)
+          if (files === null) { json(res, 404, { error: '没有找到这个技能' }); return }
+          json(res, 200, { ok: true, files })
+          return
+        }
+        if (action === 'read') {
+          const content = await readLocalSkill(roots, id)
+          if (content === null) { json(res, 404, { error: '没有找到这个技能文件' }); return }
+          json(res, 200, { ok: true, content })
+          return
+        }
+        if (action === 'write') {
+          const saved = await writeLocalSkill(roots, id, body?.content)
+          if (!saved) { json(res, 400, { error: '保存失败，请检查文件内容或文件权限' }); return }
+          json(res, 200, { ok: true })
+          return
+        }
+        json(res, 400, { error: '不支持的操作' })
+      } catch (error) {
+        json(res, 500, { error: error instanceof Error ? error.message : String(error) })
+      }
     },
   })
 

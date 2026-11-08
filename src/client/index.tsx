@@ -30,6 +30,7 @@ import {
 } from './icon-set'
 import { WorkspaceIcon } from './icon-renderer'
 import { createBundledFlowglassClient } from './flowglass-bundled.generated.js'
+import { LocalSkillsPane } from './local-skills-pane'
 
 /**
  * dsh-mytable 客户端（v2）：官方面板中的「工作台」入口。
@@ -55,7 +56,7 @@ const UPDATE_REPO = ''
 // 升级动作：本包未发布到 npm / GitHub，且仓库里不留 tarball ——
 // 升级 = 先重新构建打包，再「remove → add」重装（必须 remove：pnpm 认 lockfile 里的
 // integrity，同路径 tarball 内容变了也会跳过重装）。见包 README §5。
-const UPGRADE_CMD = 'cd C:/MyProject/deepseek/work_table/dsh-mytable; npm run build; npm pack; dsh plugin --profile mytable remove dsh-mytable; dsh plugin --profile mytable add "file:C:/MyProject/deepseek/work_table/dsh-mytable/dsh-mytable-0.1.1.tgz"'
+const UPGRADE_CMD = 'cd C:/MyProject/deepseek/work_table/dsh-mytable; npm run build; npm pack; dsh plugin --profile mytable remove dsh-mytable; dsh plugin --profile mytable add "file:C:/MyProject/deepseek/work_table/dsh-mytable/dsh-mytable-0.1.2.tgz"'
 const UPGRADE_AI = '帮我升级 dsh-mytable（工作台）：在终端执行 ' + UPGRADE_CMD + '，完成后提醒我重启 dsh --profile mytable 并刷新页面'
 // 更新提示图标（手绘 SVG，避免 emoji 跨平台渲染差异）
 const ICON_SYNC = (
@@ -3321,6 +3322,14 @@ export function apply(ctx: any) {
     const service = createMyTableService(LOCAL_VERSION, (kind, id) =>
       kind === 'pane' ? pluginPaneEnabled(id) : pluginViewerEnabled(id))
     ctx.provide('mytable', service)
+    ctx.effect(() => service.registerPaneType({
+      id: 'dsh-mytable.local-skills',
+      title: '本地技能',
+      description: '浏览并编辑个人技能和当前项目中的技能。',
+      icon: '🧠',
+      order: 45,
+      mount: ({ sessionId }) => <LocalSkillsPane sessionId={sessionId} />,
+    }), 'dsh-mytable: local skills pane')
     // 先公开服务，再启动源码内嵌的流镜；流镜启动时即可同步注册窗口类型。
     try { (window as any).__dshMytable = service } catch {}
     ctx.effect(() => () => {
